@@ -2,7 +2,7 @@ import VideoTile from './VideoTile';
 import { useAppContext } from '../context/AppContext';
 
 const VideoGrid = ({ participants }) => {
-  const { isHost, removeParticipant } = useAppContext();
+  const { isHost } = useAppContext();
   const count = participants.length;
 
   // Determine grid layout based on participant count
@@ -54,7 +54,6 @@ const VideoGrid = ({ participants }) => {
             isLocal={participant.isLocal}
             size={getTileSize()}
             isHost={isHost}
-            onRemove={removeParticipant}
           />
         ))}
       </div>

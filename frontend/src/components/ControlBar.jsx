@@ -6,7 +6,6 @@ import {
   PhoneOff, 
   BarChart3, 
   Settings,
-  UserPlus,
   Users
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
@@ -21,8 +20,7 @@ const ControlBar = () => {
     setShowStats,
     showSettings,
     setShowSettings,
-    participants,
-    addParticipant
+    participants
   } = useAppContext();
 
   const controlButtons = [
@@ -70,13 +68,6 @@ const ControlBar = () => {
       label: 'Settings',
       onClick: () => setShowSettings(!showSettings),
       isActive: showSettings
-    },
-    {
-      id: 'add-user',
-      icon: UserPlus,
-      label: 'Add participant',
-      onClick: addParticipant,
-      isActive: false
     }
   ];
 

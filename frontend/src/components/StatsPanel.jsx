@@ -1,16 +1,38 @@
 import { X, Activity, Wifi, Clock, ArrowDown, ArrowUp } from 'lucide-react';
 import { 
-  mockWebRTCStats, 
   getStatusColor, 
   getStatusText,
   formatBytes,
   formatBitrate
 } from '../data/mockData';
+import { useAppContext } from '../context/AppContext';
 
 const StatsPanel = ({ isOpen, onClose }) => {
+  const { getAggregatedStats, callDuration, connectionState, iceState } = useAppContext();
+  
   if (!isOpen) return null;
 
-  const stats = mockWebRTCStats;
+  const stats = getAggregatedStats() || {
+    callStart: '',
+    duration: callDuration,
+    iceState: iceState,
+    connectionState: connectionState,
+    candidateType: 'unknown',
+    localCandidate: { type: 'unknown', protocol: 'unknown', address: '', port: '' },
+    remoteCandidate: { type: 'unknown', protocol: 'unknown', address: '', port: '' },
+    bytesReceived: 0,
+    bytesSent: 0,
+    packetsReceived: 0,
+    packetsSent: 0,
+    packetsLost: 0,
+    jitter: 0,
+    roundTripTime: 0,
+    availableOutgoingBitrate: 0,
+    availableIncomingBitrate: 0,
+    videoResolution: { width: 0, height: 0, frameRate: 0 },
+    audioCodec: 'unknown',
+    videoCodec: 'unknown'
+  };
 
   return (
     <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-meet-darker border-l border-meet-gray/30 shadow-2xl z-40 animate-slide-up">
@@ -37,8 +59,8 @@ const StatsPanel = ({ isOpen, onClose }) => {
             Call Information
           </h3>
           <div className="space-y-2">
-            <StatRow label="Call Start" value={stats.callStart} />
-            <StatRow label="Duration" value={stats.duration} />
+            <StatRow label="Call Start" value={stats.callStart || 'N/A'} />
+            <StatRow label="Duration" value={stats.duration || callDuration} />
           </div>
         </div>
 

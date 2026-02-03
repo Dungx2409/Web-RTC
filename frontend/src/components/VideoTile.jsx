@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import { Mic, MicOff, Video, VideoOff, UserCircle, UserX } from 'lucide-react';
 import { getStatusColor, getStatusText } from '../data/mockData';
 
@@ -9,11 +10,22 @@ const VideoTile = ({
   isHost = false,
   onRemove
 }) => {
+  const videoRef = useRef(null);
+  
   const sizeClasses = {
     small: 'min-h-[120px]',
     normal: 'min-h-[200px]',
     large: 'min-h-[300px] lg:min-h-[400px]'
   };
+
+  // Attach MediaStream to video element
+  useEffect(() => {
+    if (videoRef.current && participant.stream) {
+      videoRef.current.srcObject = participant.stream;
+    }
+  }, [participant.stream]);
+
+  const hasVideoStream = participant.stream && !participant.isCameraOff;
 
   return (
     <div 
@@ -23,9 +35,19 @@ const VideoTile = ({
         isLocal ? 'ring-2 ring-meet-blue ring-opacity-50' : ''
       }`}
     >
-      {/* Video or Avatar Placeholder */}
+      {/* Video Element or Avatar Placeholder */}
       <div className="absolute inset-0 flex items-center justify-center">
-        {participant.isCameraOff ? (
+        {hasVideoStream ? (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted={isLocal} // Mute local video to prevent echo
+            className={`absolute inset-0 w-full h-full object-cover ${
+              isLocal ? 'transform scale-x-[-1]' : ''
+            }`}
+          />
+        ) : participant.isCameraOff ? (
           <div className="flex flex-col items-center gap-3">
             <div className="w-20 h-20 bg-meet-gray rounded-full flex items-center justify-center">
               <UserCircle className="w-12 h-12 text-meet-light-gray" />
@@ -33,7 +55,7 @@ const VideoTile = ({
             <span className="text-meet-light-gray text-sm">Camera off</span>
           </div>
         ) : (
-          // Simulated video with gradient background
+          // Avatar placeholder when no stream yet
           <div className="absolute inset-0 bg-gradient-to-br from-meet-gray via-meet-darker to-meet-dark">
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-24 h-24 bg-meet-gray/50 rounded-full flex items-center justify-center">

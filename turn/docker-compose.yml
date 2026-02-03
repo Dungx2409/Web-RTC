@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  coturn:
+    image: coturn/coturn:latest
+    container_name: webrtc-turn-server
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./turnserver.conf:/etc/turnserver.conf:ro
+      # Uncomment for TLS support
+      # - ./certs/turn_server_cert.pem:/etc/ssl/certs/turn_server_cert.pem:ro
+      # - ./certs/turn_server_pkey.pem:/etc/ssl/private/turn_server_pkey.pem:ro
+    command: ["-c", "/etc/turnserver.conf"]
+    # Alternative: Use port mapping instead of host network mode
+    # ports:
+    #   - "3478:3478/udp"
+    #   - "3478:3478/tcp"
+    #   - "5349:5349/udp"
+    #   - "5349:5349/tcp"
+    #   - "49152-65535:49152-65535/udp"
+    environment:
+      - DETECT_EXTERNAL_IP=yes
+      - DETECT_RELAY_IP=yes
+
+  # Optional: Coturn with custom network (for advanced setup)
+  # coturn-bridge:
+  #   image: coturn/coturn:latest
+  #   container_name: webrtc-turn-bridge
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3478:3478/udp"
+  #     - "3478:3478/tcp"
+  #     - "5349:5349/tcp"
+  #   volumes:
+  #     - ./turnserver.conf:/etc/turnserver.conf:ro
+  #   command: ["-c", "/etc/turnserver.conf", "--external-ip=$$EXTERNAL_IP"]

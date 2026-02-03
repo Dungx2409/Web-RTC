@@ -12,6 +12,7 @@ const VideoCallScreen = () => {
     participants,
     connectionState,
     iceState,
+    callDuration,
     showStats,
     setShowStats,
     showSettings,
@@ -38,9 +39,9 @@ const VideoCallScreen = () => {
           />
         </div>
 
-        {/* Call Timer (mock) */}
+        {/* Call Timer */}
         <div className="text-white font-mono text-sm">
-          00:15:23
+          {callDuration}
         </div>
       </div>
 
