@@ -20,7 +20,7 @@ services:
     region: singapore
     plan: free
     buildCommand: cd frontend && npm install --include=dev && npm run build
-    startCommand: cd frontend && npm run preview -- --host 0.0.0.0 --port $PORT
+    startCommand: cd frontend && npm start
     envVars:
       - key: NODE_ENV
         value: production
