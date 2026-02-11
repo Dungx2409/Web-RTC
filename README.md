@@ -115,6 +115,78 @@ npm run dev
 3. Tab 2: Nhập tên và Room ID từ Tab 1, click "Join Room"
 4. Click "Start Call" để bắt đầu cuộc gọi nhóm
 
+---
+
+## 🚢 Deploy lên Production
+
+### 🎯 KHUYẾN NGHỊ: Deploy Miễn Phí 100% 
+
+**💰 Chi phí: $0/tháng** - Render.com + Free TURN
+
+**⏱️ Thời gian: 15 phút** - Chỉ 3 bước đơn giản!
+
+👉 **[DEPLOY_QUICK.md](./DEPLOY_QUICK.md)** - Bắt đầu từ đây! ⚡
+
+<details>
+<summary><b>📖 Xem hướng dẫn đầy đủ</b></summary>
+
+**Chi tiết từng bước:**
+- **[DEPLOYMENT_RENDER_FREE.md](./DEPLOYMENT_RENDER_FREE.md)** - Hướng dẫn đầy đủ với screenshots
+- **[DEPLOYMENT_CHECKLIST_FREE.md](./DEPLOYMENT_CHECKLIST_FREE.md)** - Checklist tick từng bước
+
+**Tóm tắt:**
+```bash
+# 1. Push lên GitHub
+git push origin main
+
+# 2. Deploy trên Render.com
+# - Import GitHub repo
+# - Render tự động detect render.yaml
+# - Deploy 2 services cùng lúc (frontend + backend)
+
+# 3. Cập nhật Signaling URL
+# - Copy URL backend
+# - Update trong frontend environment variables
+# - Redeploy
+
+# ✅ Done! Test tại: https://webrtc-frontend-xxx.onrender.com
+```
+
+**Free TURN Server:** OpenRelay (đã config sẵn, không cần setup gì)
+
+**Kết quả:**
+- Frontend: `https://webrtc-frontend-xxx.onrender.com`
+- Backend: `wss://webrtc-signaling-xxx.onrender.com`
+- TURN: Free OpenRelay (shared)
+
+</details>
+
+---
+
+### 🏢 Phương án nâng cao: Deploy với VPS
+
+**Chi phí: ~$12/tháng** | **Cho production, nhiều users**
+
+👉 **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deploy với TURN server riêng trên VPS
+
+**Bao gồm:**
+- Setup TURN server riêng (Coturn)
+- Deploy Backend lên Render
+- Deploy Frontend lên Vercel
+- Tốc độ cao, bandwidth không giới hạn
+
+---
+
+### 🤔 Không biết chọn phương án nào?
+
+👉 **[START_HERE.md](./START_HERE.md)** - So sánh và chọn phương án phù hợp
+
+**Khuyến nghị:** Bắt đầu với **miễn phí**, nâng cấp sau khi có users.
+
+---
+
+---
+
 ## 🔧 Cấu hình
 
 ### Environment Variables (Frontend)

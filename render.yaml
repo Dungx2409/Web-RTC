@@ -1,0 +1,46 @@
+services:
+  # Signaling Server (Backend)
+  - type: web
+    name: webrtc-signaling
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+
+  # Frontend (React + Vite)
+  - type: web
+    name: webrtc-frontend
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run preview -- --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Update VITE_SIGNALING_URL with your actual signaling server URL after deployment
+      - key: VITE_SIGNALING_URL
+        value: wss://webrtc-signaling.onrender.com
+      - key: VITE_STUN_URL
+        value: stun:stun.l.google.com:19302
+      # Free TURN Server - OpenRelay (no signup required)
+      - key: VITE_TURN_UDP_URL
+        value: turn:openrelay.metered.ca:80?transport=udp
+      - key: VITE_TURN_TCP_URL
+        value: turn:openrelay.metered.ca:80?transport=tcp
+      - key: VITE_TURN_TLS_URL
+        value: turn:openrelay.metered.ca:443?transport=tcp
+      - key: VITE_TURN_USERNAME
+        value: openrelayproject
+      - key: VITE_TURN_PASSWORD
+        value: openrelayproject
+      - key: VITE_P2P_TIMEOUT
+        value: 10000

@@ -3,6 +3,53 @@
 ## Overview
 Coturn is an open-source TURN/STUN server implementation that enables WebRTC to traverse NATs and firewalls.
 
+---
+
+## 🚀 Quick Setup (Khuyến nghị)
+
+### Automated Setup with Script
+
+**Bước 1: SSH vào VPS**
+```bash
+ssh root@YOUR_VPS_IP
+```
+
+**Bước 2: Download và chạy setup script**
+```bash
+# Cách 1: Nếu đã clone repo
+cd /opt
+git clone https://github.com/YOUR_USERNAME/Web-RTC.git
+cd Web-RTC/turn
+chmod +x setup.sh
+./setup.sh
+
+# Cách 2: Download trực tiếp script
+curl -o setup.sh https://raw.githubusercontent.com/YOUR_USERNAME/Web-RTC/main/turn/setup.sh
+chmod +x setup.sh
+./setup.sh
+```
+
+**Script sẽ tự động:**
+- ✅ Cài Docker và Docker Compose
+- ✅ Detect IP public của VPS
+- ✅ Tạo file cấu hình với IP của bạn
+- ✅ Setup firewall (UFW)
+- ✅ Start TURN server container
+- ✅ Hiển thị thông tin để test
+
+**✅ Sau khi chạy xong, bạn sẽ có:**
+```
+IP Address: 165.232.xxx.xxx
+TURN Port: 3478 (TCP/UDP)
+TURNS Port: 5349 (TLS)
+Username: your-username
+Password: your-password
+```
+
+---
+
+## 📖 Manual Setup (Chi tiết)
+
 ## Quick Start with Docker
 
 ### 1. Navigate to the turn directory
