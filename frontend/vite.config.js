@@ -7,5 +7,10 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true
+  },
+  preview: {
+    host: true, // Allow external access
+    port: process.env.PORT || 4173,
+    strictPort: false
   }
 })
