@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Video, Users, ArrowRight, Plus } from 'lucide-react';
+import { Video, Users, ArrowRight, Plus, List } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
-const JoinRoomScreen = () => {
+const JoinRoomScreen = ({ onShowRoomList }) => {
   const { createRoom, joinRoom } = useAppContext();
   
   const [nickname, setNickname] = useState('');
@@ -147,24 +147,44 @@ const JoinRoomScreen = () => {
           </div>
 
           {/* Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col gap-3">
+            {/* Browse Rooms Button */}
             <button
-              onClick={handleCreateRoom}
-              disabled={isLoading || !nickname.trim()}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-meet-blue text-meet-dark font-medium rounded-xl hover:bg-meet-blue-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-meet-hover"
+              onClick={onShowRoomList}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-meet-gray text-white font-medium rounded-xl hover:bg-meet-gray/80 transition-all border border-gray-700"
             >
-              <Plus className="w-5 h-5" />
-              Create Room
+              <List className="w-5 h-5" />
+              Browse Active Rooms
             </button>
-            
-            <button
-              onClick={handleJoinRoom}
-              disabled={isLoading || !nickname.trim() || !roomIdInput.trim()}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-transparent border border-meet-blue text-meet-blue font-medium rounded-xl hover:bg-meet-blue/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Join Room
-              <ArrowRight className="w-5 h-5" />
-            </button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-meet-gray/30 text-gray-500">or</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleCreateRoom}
+                disabled={isLoading || !nickname.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-meet-blue text-meet-dark font-medium rounded-xl hover:bg-meet-blue-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-meet-hover"
+              >
+                <Plus className="w-5 h-5" />
+                Create Room
+              </button>
+              
+              <button
+                onClick={handleJoinRoom}
+                disabled={isLoading || !nickname.trim() || !roomIdInput.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-transparent border border-meet-blue text-meet-blue font-medium rounded-xl hover:bg-meet-blue/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Join Room
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Loading State */}
