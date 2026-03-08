@@ -46,6 +46,16 @@ class WebRTCService {
     // Cached ice servers (from Metered API when available)
     this._iceServersCache = null;
     this._iceServersPromise = null;
+
+    // ICE transport policy: 'all' (P2P + TURN) or 'relay' (TURN only)
+    this.iceTransportPolicy = 'all';
+  }
+
+  /**
+   * Set ICE transport policy (affects new peer connections)
+   */
+  setIceTransportPolicy(policy) {
+    this.iceTransportPolicy = policy === 'relay' ? 'relay' : 'all';
   }
 
   /**
@@ -148,7 +158,8 @@ class WebRTCService {
     console.log(`🔗 Creating peer connection to ${peerName} (${peerId})`);
 
     const pc = new RTCPeerConnection({
-      iceServers: this.getIceServers()
+      iceServers: this.getIceServers(),
+      iceTransportPolicy: this.iceTransportPolicy
     });
 
     // Add local tracks to connection

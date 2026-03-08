@@ -19,41 +19,41 @@ const SettingsPanel = ({ isOpen, onClose }) => {
   const [testResult, setTestResult] = useState(null);
   const [isTesting, setIsTesting] = useState(false);
 
-  // Load current config
+  // Load current config (sync with webRTCService for iceTransportPolicy)
   useEffect(() => {
-    const iceServers = config.iceServers;
-    const stunServer = iceServers.find(s => s.urls?.includes('stun:'));
-    const turnUdpServer = iceServers.find(s => s.urls?.includes('transport=udp'));
-    const turnTcpServer = iceServers.find(s => s.urls?.includes('transport=tcp') && !s.urls?.includes('turns:'));
-    const turnTlsServer = iceServers.find(s => s.urls?.includes('turns:'));
+    const iceServers = webRTCService.getIceServers();
+    const urls = (s) => (typeof s?.urls === 'string' ? s.urls : s?.urls?.[0]) || '';
+    const stunServer = iceServers.find(s => urls(s).includes('stun:'));
+    const turnUdpServer = iceServers.find(s => urls(s).includes('transport=udp'));
+    const turnTcpServer = iceServers.find(s => urls(s).includes('transport=tcp') && !urls(s).includes('turns:'));
+    const turnTlsServer = iceServers.find(s => urls(s).includes('turns:'));
     
     setTurnConfig({
-      stunUrl: stunServer?.urls || 'stun:stun.l.google.com:19302',
-      turnUdpUrl: turnUdpServer?.urls || '',
-      turnTcpUrl: turnTcpServer?.urls || '',
-      turnTlsUrl: turnTlsServer?.urls || '',
+      stunUrl: urls(stunServer) || 'stun:stun.l.google.com:19302',
+      turnUdpUrl: urls(turnUdpServer) || '',
+      turnTcpUrl: urls(turnTcpServer) || '',
+      turnTlsUrl: urls(turnTlsServer) || '',
       username: turnUdpServer?.username || '',
       credential: turnUdpServer?.credential || '',
-      iceTransportPolicy: 'all'
+      iceTransportPolicy: webRTCService.iceTransportPolicy
     });
-  }, []);
+  }, [isOpen]);
 
-  // Test ICE connection
+  // Test ICE connection - uses same servers as actual calls (Metered API when configured)
   const testConnection = async () => {
     setIsTesting(true);
     setTestResult(null);
     
     try {
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: turnConfig.stunUrl },
-          { 
-            urls: turnConfig.turnUdpUrl, 
-            username: turnConfig.username, 
-            credential: turnConfig.credential 
-          }
-        ]
-      });
+      // Use actual ice servers (Metered API or fallback) - same as real calls
+      const iceServers = await webRTCService.ensureIceServersReady();
+      
+      const rtcConfig = {
+        iceServers,
+        iceTransportPolicy: turnConfig.iceTransportPolicy === 'relay' ? 'relay' : 'all'
+      };
+      
+      const pc = new RTCPeerConnection(rtcConfig);
       
       const candidates = [];
       
@@ -140,6 +140,11 @@ const SettingsPanel = ({ isOpen, onClose }) => {
               <p className="text-xs text-meet-light-gray mt-1">
                 Configure your TURN server settings for fallback when P2P connections fail.
               </p>
+              {config.METERED_TURN_URL && (
+                <p className="text-xs text-meet-green mt-1">
+                  ✓ Test uses Metered API (same as real calls)
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -235,14 +240,25 @@ const SettingsPanel = ({ isOpen, onClose }) => {
           </label>
           <select
             value={turnConfig.iceTransportPolicy}
-            onChange={(e) => setTurnConfig({ ...turnConfig, iceTransportPolicy: e.target.value })}
+            onChange={(e) => {
+              const policy = e.target.value;
+              setTurnConfig({ ...turnConfig, iceTransportPolicy: policy });
+              webRTCService.setIceTransportPolicy(policy);
+              setNotification({
+                type: 'info',
+                message: policy === 'relay' 
+                  ? 'Relay Only: Áp dụng cho cuộc gọi tiếp theo. Dùng Test để kiểm tra TURN.' 
+                  : 'All (P2P + TURN): Đã áp dụng.'
+              });
+              setTimeout(() => setNotification(null), 3000);
+            }}
             className="w-full px-4 py-3 bg-meet-dark border border-meet-gray rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-meet-blue/50 focus:border-meet-blue text-sm"
           >
             <option value="all">All (P2P + TURN)</option>
             <option value="relay">Relay Only (TURN)</option>
           </select>
           <p className="text-xs text-gray-500 mt-2">
-            "Relay Only" forces all traffic through TURN server
+            Relay Only: buộc tất cả traffic qua TURN. Áp dụng cho cuộc gọi mới.
           </p>
         </div>
 
@@ -293,7 +309,9 @@ const SettingsPanel = ({ isOpen, onClose }) => {
 
         {/* Note */}
         <p className="text-xs text-gray-500 text-center">
-          Configure TURN server in environment variables (.env) for persistence.
+          {config.METERED_TURN_URL 
+            ? 'TURN from Metered API. Configure VITE_METERED_TURN_URL for production.'
+            : 'Configure TURN in .env or set VITE_METERED_TURN_URL for Metered API.'}
         </p>
       </div>
     </div>
