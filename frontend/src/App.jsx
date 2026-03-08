@@ -6,6 +6,7 @@ import RoomLobbyScreen from './components/RoomLobbyScreen';
 import RoomListScreen from './components/RoomListScreen';
 import VideoCallScreen from './components/VideoCallScreen';
 import CallEndedScreen from './components/CallEndedScreen';
+import WaitingApprovalScreen from './components/WaitingApprovalScreen';
 import DebugPanel from './components/DebugPanel';
 
 // Main app content with state-based routing
@@ -28,9 +29,9 @@ const AppContent = () => {
 
   // Handle room selection from room list
   const handleSelectRoom = (roomId) => {
-    const name = nickname || `User${Math.floor(Math.random() * 1000)}`;
+    if (!nickname.trim()) return;
     setShowRoomList(false);
-    joinRoom(name, roomId);
+    joinRoom(nickname.trim(), roomId);
   };
 
   // Show room list view
@@ -39,6 +40,8 @@ const AppContent = () => {
       <RoomListScreen 
         onSelectRoom={handleSelectRoom}
         onBack={() => setShowRoomList(false)}
+        nickname={nickname}
+        setNickname={setNickname}
       />
     );
   }
@@ -55,6 +58,13 @@ const AppContent = () => {
       return (
         <>
           <RoomLobbyScreen />
+          {showDebug && <DebugPanel />}
+        </>
+      );
+    case APP_STATES.WAITING_APPROVAL:
+      return (
+        <>
+          <WaitingApprovalScreen />
           {showDebug && <DebugPanel />}
         </>
       );

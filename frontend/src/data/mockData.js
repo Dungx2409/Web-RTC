@@ -25,6 +25,7 @@ export const ICE_STATES = {
 export const APP_STATES = {
   IDLE: 'idle',
   IN_ROOM: 'inRoom',
+  WAITING_APPROVAL: 'waitingApproval',
   CALLING: 'calling',
   ENDED: 'ended'
 };

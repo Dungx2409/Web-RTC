@@ -35,6 +35,11 @@ export const AppProvider = ({ children }) => {
   // Host status (room creator)
   const [isHost, setIsHost] = useState(false);
   
+  // Join request system
+  const [joinRequests, setJoinRequests] = useState([]);
+  const [waitingForApproval, setWaitingForApproval] = useState(false);
+  const [activeCallMembers, setActiveCallMembers] = useState([]);
+  
   // Room info
   const [roomId, setRoomId] = useState('');
   const [roomMembers, setRoomMembers] = useState([]);
@@ -266,8 +271,6 @@ export const AppProvider = ({ children }) => {
             isLocal: m.id === signalingService.getClientId()
           })));
           setAppState(APP_STATES.IN_ROOM);
-          
-          // If call is already active, we'll receive offers from existing members
         });
         
         // Room members updated
@@ -276,6 +279,8 @@ export const AppProvider = ({ children }) => {
             ...m,
             isLocal: m.id === signalingService.getClientId()
           })));
+          // Also update activeCallMembers for waiting users
+          setActiveCallMembers(msg.members);
         });
         
         // New member joined
@@ -319,6 +324,63 @@ export const AppProvider = ({ children }) => {
             });
             setTimeout(() => setNotification(null), 3000);
           }
+        });
+        
+        // Waiting for approval (non-host tried to join active call)
+        signalingService.on('waitingForApproval', (msg) => {
+          setRoomId(msg.roomId);
+          setActiveCallMembers(msg.members);
+          setWaitingForApproval(true);
+          setAppState(APP_STATES.WAITING_APPROVAL);
+        });
+        
+        // Join request received (host sees this)
+        signalingService.on('joinRequestReceived', (msg) => {
+          setJoinRequests(prev => {
+            // Avoid duplicates
+            if (prev.find(r => r.requesterId === msg.requesterId)) return prev;
+            return [...prev, {
+              requesterId: msg.requesterId,
+              name: msg.name,
+              roomId: msg.roomId,
+              timestamp: Date.now()
+            }];
+          });
+          setNotification({
+            type: 'info',
+            message: `${msg.name} is requesting to join the call`
+          });
+          setTimeout(() => setNotification(null), 5000);
+        });
+        
+        // Join approved (requester receives this)
+        signalingService.on('joinApproved', (msg) => {
+          setRoomId(msg.roomId);
+          setIsHost(false);
+          setWaitingForApproval(false);
+          setRoomMembers(msg.members.map(m => ({
+            ...m,
+            isLocal: m.id === signalingService.getClientId()
+          })));
+          setAppState(APP_STATES.IN_ROOM);
+          setNotification({
+            type: 'success',
+            message: 'Your request to join was approved!'
+          });
+          setTimeout(() => setNotification(null), 3000);
+        });
+        
+        // Join rejected (requester receives this)
+        signalingService.on('joinRejected', (msg) => {
+          setWaitingForApproval(false);
+          setRoomId('');
+          setActiveCallMembers([]);
+          setAppState(APP_STATES.IDLE);
+          setNotification({
+            type: 'error',
+            message: msg.reason || 'Your request to join was declined'
+          });
+          setTimeout(() => setNotification(null), 5000);
         });
         
         // Receive offer
@@ -484,8 +546,34 @@ export const AppProvider = ({ children }) => {
     setRoomId('');
     setRoomMembers([]);
     setIsHost(false);
+    setWaitingForApproval(false);
+    setActiveCallMembers([]);
+    setJoinRequests([]);
     setAppState(APP_STATES.IDLE);
   }, [cleanupCall]);
+
+  // Request to join an active call (non-host)
+  const requestJoinCall = useCallback((targetRoomId, name) => {
+    signalingService.requestJoin(targetRoomId, name);
+    setWaitingForApproval(true);
+    setAppState(APP_STATES.WAITING_APPROVAL);
+  }, []);
+
+  // Approve a join request (host)
+  const approveJoinRequest = useCallback((requesterId) => {
+    if (roomIdRef.current) {
+      signalingService.approveJoin(roomIdRef.current, requesterId);
+    }
+    setJoinRequests(prev => prev.filter(r => r.requesterId !== requesterId));
+  }, []);
+
+  // Reject a join request (host)
+  const rejectJoinRequest = useCallback((requesterId) => {
+    if (roomIdRef.current) {
+      signalingService.rejectJoin(roomIdRef.current, requesterId);
+    }
+    setJoinRequests(prev => prev.filter(r => r.requesterId !== requesterId));
+  }, []);
 
   // Start group call
   const startGroupCall = useCallback(async () => {
@@ -634,6 +722,9 @@ export const AppProvider = ({ children }) => {
     notification,
     isHost,
     signalingConnected,
+    joinRequests,
+    waitingForApproval,
+    activeCallMembers,
     
     // Actions
     setAppState,
@@ -648,6 +739,9 @@ export const AppProvider = ({ children }) => {
     setShowSettings,
     setNotification,
     getAggregatedStats,
+    requestJoinCall,
+    approveJoinRequest,
+    rejectJoinRequest,
     
     // Services (for advanced use)
     webRTCService,

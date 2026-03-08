@@ -3,7 +3,7 @@ import { Users, Video, Clock, RefreshCw, ExternalLink, Search } from 'lucide-rea
 import { useAppContext } from '../context/AppContext';
 import { config } from '../services/config';
 
-const RoomListScreen = ({ onSelectRoom, onBack }) => {
+const RoomListScreen = ({ onSelectRoom, onBack, nickname, setNickname }) => {
   const [rooms, setRooms] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -132,6 +132,23 @@ const RoomListScreen = ({ onSelectRoom, onBack }) => {
               className="w-full pl-10 pr-4 py-3 bg-meet-gray border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-meet-blue transition-all"
             />
           </div>
+
+          {/* Name input for joining */}
+          <div className="mt-3">
+            <div className="relative">
+              <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="Enter your name to join a room..."
+                className="w-full pl-10 pr-4 py-3 bg-meet-gray border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-meet-blue transition-all"
+              />
+            </div>
+            {!nickname.trim() && (
+              <p className="mt-1 text-xs text-meet-yellow">Name is required to join a room</p>
+            )}
+          </div>
         </div>
 
         {/* Error message */}
@@ -213,7 +230,8 @@ const RoomListScreen = ({ onSelectRoom, onBack }) => {
                   
                   <button
                     onClick={() => onSelectRoom(room.id)}
-                    className="ml-4 px-4 py-2 bg-meet-blue text-white rounded-lg hover:bg-meet-blue/90 transition-all font-medium flex items-center gap-2 opacity-0 group-hover:opacity-100"
+                    disabled={!nickname.trim()}
+                    className="ml-4 px-4 py-2 bg-meet-blue text-white rounded-lg hover:bg-meet-blue/90 transition-all font-medium flex items-center gap-2 opacity-0 group-hover:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Join
                     <ExternalLink className="w-4 h-4" />

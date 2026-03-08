@@ -289,6 +289,42 @@ class SignalingService {
   }
 
   /**
+   * Request to join an active call (for non-host)
+   */
+  requestJoin(roomId, name) {
+    this.send({
+      type: 'requestJoin',
+      roomId,
+      name,
+      sender: this.clientId
+    });
+  }
+
+  /**
+   * Approve a join request (host only)
+   */
+  approveJoin(roomId, requesterId) {
+    this.send({
+      type: 'approveJoin',
+      roomId,
+      requesterId,
+      sender: this.clientId
+    });
+  }
+
+  /**
+   * Reject a join request (host only)
+   */
+  rejectJoin(roomId, requesterId) {
+    this.send({
+      type: 'rejectJoin',
+      roomId,
+      requesterId,
+      sender: this.clientId
+    });
+  }
+
+  /**
    * End call
    */
   endCall(roomId) {

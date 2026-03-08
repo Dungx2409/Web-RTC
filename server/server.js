@@ -15,6 +15,13 @@
  * - endCall: { type: 'endCall', roomId: string, sender: string }
  * - startCall: { type: 'startCall', roomId: string, sender: string }
  * - callStarted: { type: 'callStarted', roomId: string, initiator: string }
+ * - requestJoin: { type: 'requestJoin', roomId: string, name: string }
+ * - joinRequestReceived: { type: 'joinRequestReceived', roomId: string, requesterId: string, name: string }
+ * - approveJoin: { type: 'approveJoin', roomId: string, requesterId: string }
+ * - rejectJoin: { type: 'rejectJoin', roomId: string, requesterId: string }
+ * - joinApproved: { type: 'joinApproved', roomId: string, members: [] }
+ * - joinRejected: { type: 'joinRejected', roomId: string, reason: string }
+ * - waitingForApproval: { type: 'waitingForApproval', roomId: string, members: [] }
  */
 
 const express = require('express');
@@ -62,7 +69,7 @@ const wss = new WebSocket.Server({ server });
 
 // State management
 const clients = new Map(); // clientId -> { ws, name, roomId }
-const rooms = new Map();   // roomId -> { id, members: Map(clientId -> {name, isHost}), callActive: boolean }
+const rooms = new Map();   // roomId -> { id, members: Map(clientId -> {name, isHost}), callActive: boolean, pendingRequests: Map(clientId -> {name}) }
 
 // Utility functions
 const generateClientId = () => uuidv4();
@@ -200,6 +207,15 @@ const handleMessage = (clientId, message) => {
     case 'startCall':
       handleStartCall(clientId, message);
       break;
+    case 'requestJoin':
+      handleRequestJoin(clientId, message);
+      break;
+    case 'approveJoin':
+      handleApproveJoin(clientId, message);
+      break;
+    case 'rejectJoin':
+      handleRejectJoin(clientId, message);
+      break;
     case 'offer':
       handleOffer(clientId, message);
       break;
@@ -252,6 +268,7 @@ const handleCreateRoom = (clientId, message) => {
   const room = {
     id: roomId,
     members: new Map(),
+    pendingRequests: new Map(),
     callActive: false,
     createdAt: new Date().toISOString()
   };
@@ -293,14 +310,26 @@ const handleJoinRoom = (clientId, message) => {
   
   const room = rooms.get(roomId);
   
-  // Add client to room
+  // Store client name early
+  client.name = name || client.name;
+  client.roomId = roomId;
+  
+  // If call is active, don't add to room directly — require approval
+  if (room.callActive) {
+    sendToClient(clientId, {
+      type: 'waitingForApproval',
+      roomId,
+      members: getRoomMembers(roomId)
+    });
+    console.log(`⏳ ${client.name} is waiting for approval to join room ${roomId}`);
+    return;
+  }
+  
+  // Call not active — add directly to room
   room.members.set(clientId, {
-    name: name || client.name,
+    name: client.name,
     isHost: false
   });
-  
-  client.roomId = roomId;
-  client.name = name || client.name;
   
   console.log(`➡️  ${client.name} joined room ${roomId}`);
   
@@ -411,6 +440,157 @@ const handleStartCall = (clientId, message) => {
   });
   
   console.log(`📞 Call started in room ${roomId} by ${client.name}`);
+};
+
+const handleRequestJoin = (clientId, message) => {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  const { roomId, name } = message;
+  const room = rooms.get(roomId);
+  if (!room) return;
+  
+  // Update client name
+  client.name = name || client.name;
+  client.roomId = roomId;
+  
+  // Add to pending requests
+  room.pendingRequests.set(clientId, {
+    name: client.name
+  });
+  
+  // Find the host and forward the request
+  room.members.forEach((memberInfo, memberId) => {
+    if (memberInfo.isHost) {
+      sendToClient(memberId, {
+        type: 'joinRequestReceived',
+        roomId,
+        requesterId: clientId,
+        name: client.name
+      });
+    }
+  });
+  
+  console.log(`🙋 ${client.name} requested to join room ${roomId}`);
+};
+
+const handleApproveJoin = (clientId, message) => {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  const { roomId, requesterId } = message;
+  const room = rooms.get(roomId);
+  if (!room) return;
+  
+  // Only host can approve
+  const memberInfo = room.members.get(clientId);
+  if (!memberInfo || !memberInfo.isHost) {
+    sendToClient(clientId, {
+      type: 'error',
+      message: 'Only the host can approve join requests'
+    });
+    return;
+  }
+  
+  // Get pending request info
+  const pendingInfo = room.pendingRequests.get(requesterId);
+  if (!pendingInfo) {
+    sendToClient(clientId, {
+      type: 'error',
+      message: 'Join request not found or already handled'
+    });
+    return;
+  }
+  
+  // Remove from pending
+  room.pendingRequests.delete(requesterId);
+  
+  // Add requester to room members
+  const requesterClient = clients.get(requesterId);
+  if (!requesterClient || requesterClient.ws.readyState !== WebSocket.OPEN) {
+    sendToClient(clientId, {
+      type: 'error',
+      message: 'The requester is no longer connected'
+    });
+    return;
+  }
+  
+  room.members.set(requesterId, {
+    name: pendingInfo.name,
+    isHost: false
+  });
+  
+  requesterClient.roomId = roomId;
+  
+  console.log(`✅ ${pendingInfo.name} approved to join room ${roomId}`);
+  
+  // Notify the requester that they've been approved
+  sendToClient(requesterId, {
+    type: 'joinApproved',
+    roomId,
+    isHost: false,
+    members: getRoomMembers(roomId),
+    callActive: room.callActive
+  });
+  
+  // Notify existing members about new member
+  broadcast(roomId, {
+    type: 'memberJoined',
+    roomId,
+    member: {
+      id: requesterId,
+      name: pendingInfo.name,
+      isHost: false
+    }
+  }, requesterId);
+  
+  // Send updated member list to all
+  broadcast(roomId, {
+    type: 'roomMembers',
+    roomId,
+    members: getRoomMembers(roomId)
+  });
+};
+
+const handleRejectJoin = (clientId, message) => {
+  const client = clients.get(clientId);
+  if (!client) return;
+  
+  const { roomId, requesterId } = message;
+  const room = rooms.get(roomId);
+  if (!room) return;
+  
+  // Only host can reject
+  const memberInfo = room.members.get(clientId);
+  if (!memberInfo || !memberInfo.isHost) {
+    sendToClient(clientId, {
+      type: 'error',
+      message: 'Only the host can reject join requests'
+    });
+    return;
+  }
+  
+  // Get pending request info
+  const pendingInfo = room.pendingRequests.get(requesterId);
+  if (!pendingInfo) return;
+  
+  // Remove from pending
+  room.pendingRequests.delete(requesterId);
+  
+  // Notify the requester they've been rejected
+  sendToClient(requesterId, {
+    type: 'joinRejected',
+    roomId,
+    reason: 'The host declined your request to join'
+  });
+  
+  // Also clear their roomId reference
+  const requesterClient = clients.get(requesterId);
+  if (requesterClient) {
+    requesterClient.roomId = null;
+  }
+  
+  console.log(`❌ ${pendingInfo.name} rejected from room ${roomId}`);
 };
 
 const handleOffer = (clientId, message) => {

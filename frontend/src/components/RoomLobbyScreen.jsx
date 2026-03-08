@@ -103,8 +103,8 @@ const RoomLobbyScreen = () => {
                         <span className="ml-2 text-meet-blue text-sm">(You)</span>
                       )}
                     </p>
-                    {/* Host badge - show for the first member (creator) or if current user is host and local */}
-                    {((member.isLocal || member.name === currentUser.name) && isHost) && (
+                    {/* Host badge - show based on member's isHost property */}
+                    {member.isHost && (
                       <span className="flex items-center gap-1 px-2 py-0.5 bg-meet-yellow/20 text-meet-yellow text-xs rounded-full">
                         <Crown className="w-3 h-3" />
                         Host

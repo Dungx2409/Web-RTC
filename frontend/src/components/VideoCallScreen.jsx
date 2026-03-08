@@ -5,6 +5,7 @@ import ConnectionStatus from './ConnectionStatus';
 import StatsPanel from './StatsPanel';
 import SettingsPanel from './SettingsPanel';
 import Toast from './Toast';
+import JoinRequestNotification from './JoinRequestNotification';
 
 const VideoCallScreen = () => {
   const { 
@@ -62,6 +63,9 @@ const VideoCallScreen = () => {
         isOpen={showSettings} 
         onClose={() => setShowSettings(false)} 
       />
+
+      {/* Join Request Notifications (for host) */}
+      <JoinRequestNotification />
 
       {/* Toast Notifications */}
       <Toast 
