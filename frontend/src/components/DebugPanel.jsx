@@ -1,12 +1,31 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { config } from '../services/config';
+import { webRTCService } from '../services/webrtc';
 
 const DebugPanel = () => {
+  const [iceServers, setIceServers] = useState(config.iceServers);
+  const [meteredStatus, setMeteredStatus] = useState('');
+
   useEffect(() => {
     console.log('=== WebRTC Configuration ===');
     console.log('Signaling URL:', config.SIGNALING_URL);
     console.log('ICE Servers:', config.iceServers);
     console.log('P2P Timeout:', config.P2P_TIMEOUT_MS);
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!config.METERED_TURN_URL) {
+        setMeteredStatus('Not configured (using static TURN)');
+        setIceServers(config.iceServers);
+        return;
+      }
+      setMeteredStatus('Fetching...');
+      const servers = await webRTCService.ensureIceServersReady();
+      setIceServers(servers);
+      setMeteredStatus(servers !== config.iceServers ? '✅ Metered API' : '⚠️ Fallback');
+    };
+    load();
   }, []);
 
   return (
@@ -20,9 +39,12 @@ const DebugPanel = () => {
         </div>
         <div>
           <strong>ICE Servers:</strong>
-          {config.iceServers.map((server, i) => (
+          {config.METERED_TURN_URL && (
+            <span className="ml-2 text-yellow-400">({meteredStatus})</span>
+          )}
+          {iceServers.map((server, i) => (
             <div key={i} className="ml-2 mt-1 text-gray-300">
-              • {server.urls}
+              • {typeof server.urls === 'string' ? server.urls : server.urls?.[0]}
               {server.username && ` (${server.username})`}
             </div>
           ))}
