@@ -379,20 +379,37 @@ const handleStartCall = (clientId, message) => {
   
   const { roomId } = client;
   const room = rooms.get(roomId);
+  if (!room) return;
   
-  if (room) {
-    room.callActive = true;
-    
-    // Notify all members that call has started
-    broadcast(roomId, {
-      type: 'callStarted',
-      roomId,
-      initiator: clientId,
-      initiatorName: client.name
+  // Only host can start the call
+  const memberInfo = room.members.get(clientId);
+  if (!memberInfo || !memberInfo.isHost) {
+    sendToClient(clientId, {
+      type: 'error',
+      message: 'Only the host can start the group call'
     });
-    
-    console.log(`📞 Call started in room ${roomId} by ${client.name}`);
+    return;
   }
+  
+  if (room.members.size < 2) {
+    sendToClient(clientId, {
+      type: 'error',
+      message: 'At least 2 participants are required to start a call'
+    });
+    return;
+  }
+  
+  room.callActive = true;
+  
+  // Notify all members that call has started
+  broadcast(roomId, {
+    type: 'callStarted',
+    roomId,
+    initiator: clientId,
+    initiatorName: client.name
+  });
+  
+  console.log(`📞 Call started in room ${roomId} by ${client.name}`);
 };
 
 const handleOffer = (clientId, message) => {

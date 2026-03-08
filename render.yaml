@@ -29,16 +29,17 @@ services:
         value: wss://webrtc-signaling-0gy4.onrender.com
       - key: VITE_STUN_URL
         value: stun:stun.l.google.com:19302
-      # Free TURN Server - OpenRelay (no signup required)
+      # Free TURN Server - freeTURN (no signup, free:free)
+      # Alternative: OpenRelay requires API signup - metered.ca/tools/openrelay
       - key: VITE_TURN_UDP_URL
-        value: turn:openrelay.metered.ca:80?transport=udp
+        value: turn:freeturn.net:3478?transport=udp
       - key: VITE_TURN_TCP_URL
-        value: turn:openrelay.metered.ca:80?transport=tcp
+        value: turn:freeturn.net:3478?transport=tcp
       - key: VITE_TURN_TLS_URL
-        value: turn:openrelay.metered.ca:443?transport=tcp
+        value: turns:freeturn.net:5349?transport=tcp
       - key: VITE_TURN_USERNAME
-        value: openrelayproject
+        value: free
       - key: VITE_TURN_PASSWORD
-        value: openrelayproject
+        value: free
       - key: VITE_P2P_TIMEOUT
         value: 10000

@@ -69,6 +69,7 @@ export const AppProvider = ({ children }) => {
   const appStateRef = useRef(appState);
   const currentUserRef = useRef(currentUser);
   const roomIdRef = useRef(roomId);
+  const roomMembersRef = useRef(roomMembers);
   
   useEffect(() => {
     appStateRef.current = appState;
@@ -81,6 +82,10 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     roomIdRef.current = roomId;
   }, [roomId]);
+  
+  useEffect(() => {
+    roomMembersRef.current = roomMembers;
+  }, [roomMembers]);
 
   // Start call timer
   const startCallTimer = useCallback(() => {
@@ -511,9 +516,9 @@ export const AppProvider = ({ children }) => {
       startCallTimer();
       webRTCService.startStatsCollection(config.STATS_INTERVAL_MS);
       
-      // Create peer connections to all room members
+      // Create peer connections to all room members (use ref to avoid stale closure)
       const myId = signalingService.getClientId();
-      const currentRoomMembers = roomMembers;
+      const currentRoomMembers = roomMembersRef.current;
       const currentRoomId = roomIdRef.current;
       const otherMembers = currentRoomMembers.filter(m => m.id !== myId);
       
@@ -529,7 +534,7 @@ export const AppProvider = ({ children }) => {
       });
       setTimeout(() => setNotification(null), 5000);
     }
-  }, [roomMembers, initiateCallToPeer, startCallTimer]);
+  }, [initiateCallToPeer, startCallTimer]);
 
   // End call
   const endCall = useCallback(() => {

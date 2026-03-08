@@ -24,7 +24,7 @@ const RoomLobbyScreen = () => {
     }
   };
 
-  const canStartCall = roomMembers.length >= 2;
+  const canStartCall = roomMembers.length >= 2 && isHost;
 
   return (
     <div className="min-h-screen bg-meet-dark flex items-center justify-center p-4">
@@ -143,7 +143,7 @@ const RoomLobbyScreen = () => {
             className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-meet-green text-white font-medium rounded-xl hover:bg-meet-green/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-meet-hover"
           >
             <PhoneCall className="w-5 h-5" />
-            Start Group Call
+            {isHost ? 'Start Group Call' : 'Waiting for host...'}
           </button>
           
           <button
@@ -157,7 +157,9 @@ const RoomLobbyScreen = () => {
 
         {!canStartCall && (
           <p className="text-center text-meet-light-gray text-sm mt-4">
-            At least 2 participants are required to start a call
+            {!isHost
+              ? 'Only the host can start the group call'
+              : 'At least 2 participants are required to start a call'}
           </p>
         )}
       </div>

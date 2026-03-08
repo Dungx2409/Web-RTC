@@ -19,37 +19,33 @@ export const config = {
   P2P_TIMEOUT_MS: parseInt(getEnvVar('VITE_P2P_TIMEOUT', '10000')),
   
   // ICE servers configuration
-  iceServers: [
-    // STUN server (Google's public STUN)
-    {
-      urls: getEnvVar('VITE_STUN_URL', 'stun:stun.l.google.com:19302')
-    },
-    // Additional STUN servers for redundancy
-    {
-      urls: 'stun:stun1.l.google.com:19302'
-    },
-    {
-      urls: 'stun:stun2.l.google.com:19302'
-    },
-    // TURN server (UDP)
-    {
-      urls: getEnvVar('VITE_TURN_UDP_URL', 'turn:localhost:3478?transport=udp'),
-      username: getEnvVar('VITE_TURN_USERNAME', 'webrtc'),
-      credential: getEnvVar('VITE_TURN_PASSWORD', 'webrtc123')
-    },
-    // TURN server (TCP)
-    {
-      urls: getEnvVar('VITE_TURN_TCP_URL', 'turn:localhost:3478?transport=tcp'),
-      username: getEnvVar('VITE_TURN_USERNAME', 'webrtc'),
-      credential: getEnvVar('VITE_TURN_PASSWORD', 'webrtc123')
-    },
-    // TURN server (TLS - secure)
-    {
-      urls: getEnvVar('VITE_TURN_TLS_URL', 'turns:localhost:5349?transport=tcp'),
-      username: getEnvVar('VITE_TURN_USERNAME', 'webrtc'),
-      credential: getEnvVar('VITE_TURN_PASSWORD', 'webrtc123')
+  iceServers: (() => {
+    const servers = [
+      // STUN server (Google's public STUN)
+      { urls: getEnvVar('VITE_STUN_URL', 'stun:stun.l.google.com:19302') },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' }
+    ];
+    // TURN - only add if URLs are not localhost (for production/cross-network)
+    const turnUdp = getEnvVar('VITE_TURN_UDP_URL', 'turn:localhost:3478?transport=udp');
+    const turnUser = getEnvVar('VITE_TURN_USERNAME', 'webrtc');
+    const turnPass = getEnvVar('VITE_TURN_PASSWORD', 'webrtc123');
+    if (!turnUdp.includes('localhost')) {
+      servers.push(
+        { urls: turnUdp, username: turnUser, credential: turnPass },
+        { urls: getEnvVar('VITE_TURN_TCP_URL', turnUdp.replace('udp', 'tcp')), username: turnUser, credential: turnPass },
+        { urls: getEnvVar('VITE_TURN_TLS_URL', 'turns:freeturn.net:5349?transport=tcp'), username: turnUser, credential: turnPass }
+      );
+    } else {
+      // Local dev - add localhost TURN (for coturn Docker)
+      servers.push(
+        { urls: turnUdp, username: turnUser, credential: turnPass },
+        { urls: getEnvVar('VITE_TURN_TCP_URL', 'turn:localhost:3478?transport=tcp'), username: turnUser, credential: turnPass },
+        { urls: getEnvVar('VITE_TURN_TLS_URL', 'turns:localhost:5349?transport=tcp'), username: turnUser, credential: turnPass }
+      );
     }
-  ],
+    return servers;
+  })(),
   
   // Media constraints
   mediaConstraints: {
