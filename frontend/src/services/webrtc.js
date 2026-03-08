@@ -8,7 +8,7 @@
  * - Automatic TURN fallback
  */
 
-import { config } from './config';
+import { config, fetchMeteredIceServers } from './config';
 
 class WebRTCService {
   constructor() {
@@ -42,13 +42,31 @@ class WebRTCService {
 
     // Queue for ICE candidates that arrive before offer (Host->Guest: candidates can arrive first)
     this.pendingCandidates = new Map(); // peerId -> [candidate, ...]
+
+    // Cached ice servers (from Metered API when available)
+    this._iceServersCache = null;
+    this._iceServersPromise = null;
   }
 
   /**
-   * Get ICE servers configuration
+   * Ensure ICE servers are ready (fetch from Metered API if configured)
+   */
+  async ensureIceServersReady() {
+    if (this._iceServersCache) return this._iceServersCache;
+    if (this._iceServersPromise) return this._iceServersPromise;
+    this._iceServersPromise = (async () => {
+      const metered = await fetchMeteredIceServers();
+      this._iceServersCache = metered || config.iceServers;
+      return this._iceServersCache;
+    })();
+    return this._iceServersPromise;
+  }
+
+  /**
+   * Get ICE servers configuration (sync - uses cache or fallback)
    */
   getIceServers() {
-    return config.iceServers;
+    return this._iceServersCache || config.iceServers;
   }
 
   /**
@@ -118,14 +136,15 @@ class WebRTCService {
   }
 
   /**
-   * Create a new peer connection
+   * Create a new peer connection (async - fetches TURN from Metered API if configured)
    */
-  createPeerConnection(peerId, peerName) {
+  async createPeerConnection(peerId, peerName) {
     if (this.peerConnections.has(peerId)) {
       console.warn(`Peer connection already exists for ${peerId}`);
       return this.peerConnections.get(peerId);
     }
 
+    await this.ensureIceServersReady();
     console.log(`🔗 Creating peer connection to ${peerName} (${peerId})`);
 
     const pc = new RTCPeerConnection({
@@ -319,7 +338,7 @@ class WebRTCService {
   async handleOffer(peerId, peerName, offer) {
     let pc = this.peerConnections.get(peerId);
     if (!pc) {
-      pc = this.createPeerConnection(peerId, peerName);
+      pc = await this.createPeerConnection(peerId, peerName);
     }
 
     try {

@@ -169,7 +169,7 @@ export const AppProvider = ({ children }) => {
     console.log(`📞 Initiating call to ${peerName}`);
     
     // Create peer connection
-    webRTCService.createPeerConnection(peerId, peerName);
+    await webRTCService.createPeerConnection(peerId, peerName);
     
     // Set up ICE candidate handler
     webRTCService.onIceCandidate(peerId, (candidate) => {

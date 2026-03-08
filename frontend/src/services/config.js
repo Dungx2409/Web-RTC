@@ -11,6 +11,30 @@ const getEnvVar = (key, defaultValue) => {
   return defaultValue;
 };
 
+// Metered OpenRelay API - fetch TURN credentials dynamically (20GB free/month)
+const METERED_TURN_URL = getEnvVar('VITE_METERED_TURN_URL', '');
+
+/**
+ * Fetch iceServers from Metered OpenRelay API (returns full iceServers array)
+ * Sign up free at: https://dashboard.metered.ca/signup?tool=turnserver
+ * Set VITE_METERED_TURN_URL = https://YOUR_APP.metered.live/api/v1/turn/credentials?apiKey=YOUR_API_KEY
+ */
+export async function fetchMeteredIceServers() {
+  if (!METERED_TURN_URL) return null;
+  try {
+    const res = await fetch(METERED_TURN_URL);
+    if (!res.ok) throw new Error(`Metered API ${res.status}`);
+    const iceServers = await res.json();
+    if (Array.isArray(iceServers) && iceServers.length > 0) {
+      console.log('✅ TURN: Loaded from Metered OpenRelay API');
+      return iceServers;
+    }
+  } catch (err) {
+    console.warn('⚠️ TURN: Metered API failed, using fallback:', err.message);
+  }
+  return null;
+}
+
 export const config = {
   // Signaling server URL
   SIGNALING_URL: getEnvVar('VITE_SIGNALING_URL', 'ws://localhost:3001'),
@@ -18,7 +42,10 @@ export const config = {
   // P2P timeout before TURN fallback notification (ms)
   P2P_TIMEOUT_MS: parseInt(getEnvVar('VITE_P2P_TIMEOUT', '10000')),
   
-  // ICE servers configuration
+  // Metered API URL for dynamic TURN (optional)
+  METERED_TURN_URL,
+  
+  // ICE servers configuration (fallback - used when Metered API not set or fails)
   iceServers: (() => {
     const servers = [
       // STUN server (Google's public STUN)
