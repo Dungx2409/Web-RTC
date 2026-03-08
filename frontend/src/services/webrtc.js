@@ -39,6 +39,9 @@ class WebRTCService {
     // P2P timeout tracking
     this.p2pTimeouts = new Map();
     this.P2P_TIMEOUT = config.P2P_TIMEOUT_MS;
+
+    // Queue for ICE candidates that arrive before offer (Host->Guest: candidates can arrive first)
+    this.pendingCandidates = new Map(); // peerId -> [candidate, ...]
   }
 
   /**
@@ -322,10 +325,33 @@ class WebRTCService {
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       console.log(`📥 Set remote offer from ${peerName}`);
+      // Drain queued candidates that arrived before the offer (fix Host-start flow)
+      await this.drainPendingCandidates(peerId, pc);
       return pc;
     } catch (error) {
       console.error(`Failed to handle offer from ${peerId}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Drain pending ICE candidates that arrived before the offer
+   */
+  async drainPendingCandidates(peerId, pc) {
+    const pending = this.pendingCandidates.get(peerId);
+    if (!pending || pending.length === 0) return;
+    this.pendingCandidates.delete(peerId);
+    for (const candidate of pending) {
+      try {
+        if (candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      } catch (err) {
+        console.warn(`Failed to add queued candidate for ${peerId}:`, err);
+      }
+    }
+    if (pending.length > 0) {
+      console.log(`📥 Applied ${pending.length} queued ICE candidates for ${peerId}`);
     }
   }
 
@@ -375,7 +401,11 @@ class WebRTCService {
   async handleCandidate(peerId, candidate) {
     const pc = this.peerConnections.get(peerId);
     if (!pc) {
-      console.error(`No peer connection for ${peerId}`);
+      // Queue for later - candidates can arrive before offer (Host-start flow)
+      if (!this.pendingCandidates.has(peerId)) {
+        this.pendingCandidates.set(peerId, []);
+      }
+      this.pendingCandidates.get(peerId).push(candidate);
       return;
     }
 
@@ -412,6 +442,7 @@ class WebRTCService {
       this.peerConnections.delete(peerId);
       this.remoteStreams.delete(peerId);
       this.stats.delete(peerId);
+      this.pendingCandidates.delete(peerId);
       this.clearP2PTimeout(peerId);
       console.log(`🔌 Closed peer connection: ${peerId}`);
     }
@@ -428,6 +459,7 @@ class WebRTCService {
     this.peerConnections.clear();
     this.remoteStreams.clear();
     this.stats.clear();
+    this.pendingCandidates.clear();
     this.stopStatsCollection();
     console.log('🔌 Closed all peer connections');
   }
