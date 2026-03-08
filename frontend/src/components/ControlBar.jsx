@@ -20,6 +20,8 @@ const ControlBar = () => {
     setShowStats,
     showSettings,
     setShowSettings,
+    showMembers,
+    setShowMembers,
     participants
   } = useAppContext();
 
@@ -55,6 +57,13 @@ const ControlBar = () => {
   ];
 
   const secondaryButtons = [
+    {
+      id: 'members',
+      icon: Users,
+      label: 'Participants',
+      onClick: () => setShowMembers(!showMembers),
+      isActive: showMembers
+    },
     {
       id: 'stats',
       icon: BarChart3,

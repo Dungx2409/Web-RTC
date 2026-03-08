@@ -61,6 +61,7 @@ export const AppProvider = ({ children }) => {
   // UI states
   const [showStats, setShowStats] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
   const [notification, setNotification] = useState(null);
   
   // Signaling connected state
@@ -284,12 +285,22 @@ export const AppProvider = ({ children }) => {
         });
         
         // New member joined
-        signalingService.on('memberJoined', (msg) => {
+        signalingService.on('memberJoined', async (msg) => {
           setNotification({
             type: 'info',
             message: `${msg.member.name} joined the room`
           });
           setTimeout(() => setNotification(null), 3000);
+          
+          // If we are currently in a call, initiate peer connection to the new member
+          if (appStateRef.current === APP_STATES.CALLING) {
+            try {
+              const currentRoomId = roomIdRef.current;
+              await initiateCallToPeer(currentRoomId, msg.member.id, msg.member.name);
+            } catch (error) {
+              console.error('Failed to connect to new member:', error);
+            }
+          }
         });
         
         // Member left
@@ -354,7 +365,7 @@ export const AppProvider = ({ children }) => {
         });
         
         // Join approved (requester receives this)
-        signalingService.on('joinApproved', (msg) => {
+        signalingService.on('joinApproved', async (msg) => {
           setRoomId(msg.roomId);
           setIsHost(false);
           setWaitingForApproval(false);
@@ -362,12 +373,60 @@ export const AppProvider = ({ children }) => {
             ...m,
             isLocal: m.id === signalingService.getClientId()
           })));
-          setAppState(APP_STATES.IN_ROOM);
-          setNotification({
-            type: 'success',
-            message: 'Your request to join was approved!'
-          });
-          setTimeout(() => setNotification(null), 3000);
+          
+          // If call is active, join the call directly
+          if (msg.callActive) {
+            try {
+              // Get local media stream
+              const stream = await webRTCService.getLocalStream();
+              setLocalStream(stream);
+              
+              // Add local participant
+              const localParticipant = {
+                id: signalingService.getClientId(),
+                name: currentUserRef.current.name,
+                isLocal: true,
+                stream,
+                connectionState: 'connected',
+                iceState: 'connected',
+                isMuted: currentUserRef.current.isMuted,
+                isCameraOff: currentUserRef.current.isCameraOff
+              };
+              setParticipants([localParticipant]);
+              
+              // Switch to calling state
+              setAppState(APP_STATES.CALLING);
+              setConnectionState('connecting');
+              setIceState('checking');
+              
+              // Start call timer and stats
+              startCallTimer();
+              webRTCService.startStatsCollection(config.STATS_INTERVAL_MS);
+              
+              setNotification({
+                type: 'success',
+                message: 'Joined the call!'
+              });
+              setTimeout(() => setNotification(null), 3000);
+              
+              // Existing members will initiate connections to us via memberJoined handler
+            } catch (error) {
+              console.error('Failed to join call after approval:', error);
+              setAppState(APP_STATES.IN_ROOM);
+              setNotification({
+                type: 'error',
+                message: 'Failed to access camera/microphone'
+              });
+              setTimeout(() => setNotification(null), 5000);
+            }
+          } else {
+            setAppState(APP_STATES.IN_ROOM);
+            setNotification({
+              type: 'success',
+              message: 'Your request to join was approved!'
+            });
+            setTimeout(() => setNotification(null), 3000);
+          }
         });
         
         // Join rejected (requester receives this)
@@ -719,6 +778,7 @@ export const AppProvider = ({ children }) => {
     callDuration,
     showStats,
     showSettings,
+    showMembers,
     notification,
     isHost,
     signalingConnected,
@@ -737,6 +797,7 @@ export const AppProvider = ({ children }) => {
     toggleCamera,
     setShowStats,
     setShowSettings,
+    setShowMembers,
     setNotification,
     getAggregatedStats,
     requestJoinCall,

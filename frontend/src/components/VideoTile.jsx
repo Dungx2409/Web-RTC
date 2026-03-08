@@ -23,7 +23,7 @@ const VideoTile = ({
     if (videoRef.current && participant.stream) {
       videoRef.current.srcObject = participant.stream;
     }
-  }, [participant.stream]);
+  }, [participant.stream, participant.isCameraOff]);
 
   const hasVideoStream = participant.stream && !participant.isCameraOff;
 

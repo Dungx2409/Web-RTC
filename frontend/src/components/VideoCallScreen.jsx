@@ -4,6 +4,7 @@ import ControlBar from './ControlBar';
 import ConnectionStatus from './ConnectionStatus';
 import StatsPanel from './StatsPanel';
 import SettingsPanel from './SettingsPanel';
+import MembersPanel from './MembersPanel';
 import Toast from './Toast';
 import JoinRequestNotification from './JoinRequestNotification';
 
@@ -18,6 +19,8 @@ const VideoCallScreen = () => {
     setShowStats,
     showSettings,
     setShowSettings,
+    showMembers,
+    setShowMembers,
     notification,
     setNotification
   } = useAppContext();
@@ -64,6 +67,12 @@ const VideoCallScreen = () => {
         onClose={() => setShowSettings(false)} 
       />
 
+      {/* Members Panel (Slide-in) */}
+      <MembersPanel 
+        isOpen={showMembers} 
+        onClose={() => setShowMembers(false)} 
+      />
+
       {/* Join Request Notifications (for host) */}
       <JoinRequestNotification />
 
@@ -74,12 +83,13 @@ const VideoCallScreen = () => {
       />
 
       {/* Overlay when panels are open */}
-      {(showStats || showSettings) && (
+      {(showStats || showSettings || showMembers) && (
         <div 
           className="fixed inset-0 bg-black/30 z-30"
           onClick={() => {
             setShowStats(false);
             setShowSettings(false);
+            setShowMembers(false);
           }}
         />
       )}
