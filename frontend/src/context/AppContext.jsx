@@ -307,8 +307,11 @@ export const AppProvider = ({ children }) => {
           setAppState(APP_STATES.IDLE);
         });
         
-        // Call started by someone
+        // Call started by someone - sync iceTransportPolicy from Host
         signalingService.on('callStarted', (msg) => {
+          if (msg.initiator !== signalingService.getClientId() && msg.iceTransportPolicy) {
+            webRTCService.setIceTransportPolicy(msg.iceTransportPolicy);
+          }
           if (msg.initiator !== signalingService.getClientId()) {
             setNotification({
               type: 'info',
@@ -509,8 +512,8 @@ export const AppProvider = ({ children }) => {
       setConnectionState('connecting');
       setIceState('checking');
       
-      // Notify server
-      signalingService.startCall(roomIdRef.current);
+      // Notify server (include Host's iceTransportPolicy so Client syncs to same)
+      signalingService.startCall(roomIdRef.current, webRTCService.iceTransportPolicy);
       
       // Start call timer and stats collection
       startCallTimer();

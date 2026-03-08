@@ -247,8 +247,8 @@ const SettingsPanel = ({ isOpen, onClose }) => {
               setNotification({
                 type: 'info',
                 message: policy === 'relay' 
-                  ? 'Relay Only: Áp dụng cho cuộc gọi tiếp theo. Dùng Test để kiểm tra TURN.' 
-                  : 'All (P2P + TURN): Đã áp dụng.'
+                  ? 'Relay Only: Là Host thì tất cả sẽ dùng Relay.' 
+                  : 'All: Là Host thì tất cả sẽ dùng All (P2P + TURN).'
               });
               setTimeout(() => setNotification(null), 3000);
             }}
@@ -258,7 +258,7 @@ const SettingsPanel = ({ isOpen, onClose }) => {
             <option value="relay">Relay Only (TURN)</option>
           </select>
           <p className="text-xs text-gray-500 mt-2">
-            Relay Only: buộc tất cả traffic qua TURN. Áp dụng cho cuộc gọi mới.
+            Relay Only: buộc tất cả traffic qua TURN. Host bắt đầu call → tất cả dùng chung chế độ.
           </p>
         </div>
 

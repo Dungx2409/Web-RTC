@@ -240,11 +240,12 @@ class SignalingService {
   /**
    * Start group call in room
    */
-  startCall(roomId) {
+  startCall(roomId, iceTransportPolicy = 'all') {
     this.send({
       type: 'startCall',
       roomId,
-      sender: this.clientId
+      sender: this.clientId,
+      iceTransportPolicy
     });
   }
 

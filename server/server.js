@@ -401,12 +401,13 @@ const handleStartCall = (clientId, message) => {
   
   room.callActive = true;
   
-  // Notify all members that call has started
+  // Notify all members that call has started (include Host's iceTransportPolicy for sync)
   broadcast(roomId, {
     type: 'callStarted',
     roomId,
     initiator: clientId,
-    initiatorName: client.name
+    initiatorName: client.name,
+    iceTransportPolicy: message.iceTransportPolicy || 'all'
   });
   
   console.log(`📞 Call started in room ${roomId} by ${client.name}`);
