@@ -473,7 +473,19 @@ export const AppProvider = ({ children }) => {
           setIceState('new');
           setCallStats(null);
           
-          setAppState(APP_STATES.IN_ROOM);
+          setAppState(APP_STATES.ENDED);
+          setTimeout(() => {
+            if (roomIdRef.current) {
+              signalingService.leaveRoom(roomIdRef.current);
+            }
+            setRoomId('');
+            setRoomMembers([]);
+            setIsHost(false);
+            setWaitingForApproval(false);
+            setActiveCallMembers([]);
+            setJoinRequests([]);
+            setAppState(APP_STATES.IDLE);
+          }, 2000);
         });
         
         // Handle errors
@@ -705,9 +717,18 @@ export const AppProvider = ({ children }) => {
     // Show ended screen briefly
     setAppState(APP_STATES.ENDED);
     
-    // Return to room after delay
+    // Return to main screen after delay
     setTimeout(() => {
-      setAppState(APP_STATES.IN_ROOM);
+      if (roomIdRef.current) {
+        signalingService.leaveRoom(roomIdRef.current);
+      }
+      setRoomId('');
+      setRoomMembers([]);
+      setIsHost(false);
+      setWaitingForApproval(false);
+      setActiveCallMembers([]);
+      setJoinRequests([]);
+      setAppState(APP_STATES.IDLE);
     }, 2000);
   }, [callDuration, cleanupCall]);
 
