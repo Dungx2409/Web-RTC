@@ -163,22 +163,34 @@ const cleanupClient = (clientId) => {
   if (roomId) {
     const room = rooms.get(roomId);
     if (room) {
+      const isHost = room.members.get(clientId)?.isHost;
       room.members.delete(clientId);
 
-      // Notify remaining members
-      broadcast(roomId, {
-        type: 'memberLeft',
-        roomId,
-        name,
-        memberId: clientId
-      });
+      if (room.callActive && (isHost || room.members.size < 2)) {
+        room.callActive = false;
+        broadcast(roomId, {
+          type: 'callEnded',
+          roomId,
+          endedBy: clientId,
+          endedByName: name || 'A user'
+        });
+        console.log(`📴 Call ended in room ${roomId} due to disconnect of ${name || clientId}`);
+      } else {
+        // Notify remaining members
+        broadcast(roomId, {
+          type: 'memberLeft',
+          roomId,
+          name,
+          memberId: clientId
+        });
 
-      // Update room members list
-      broadcast(roomId, {
-        type: 'roomMembers',
-        roomId,
-        members: getRoomMembers(roomId)
-      });
+        // Update room members list
+        broadcast(roomId, {
+          type: 'roomMembers',
+          roomId,
+          members: getRoomMembers(roomId)
+        });
+      }
 
       // Clean up empty room
       if (room.members.size === 0) {
@@ -416,22 +428,34 @@ const handleLeaveRoom = (clientId, message) => {
   const room = rooms.get(roomId);
 
   if (room) {
+    const isHost = room.members.get(clientId)?.isHost;
     room.members.delete(clientId);
 
-    // Notify remaining members
-    broadcast(roomId, {
-      type: 'memberLeft',
-      roomId,
-      name: client.name,
-      memberId: clientId
-    });
+    if (room.callActive && (isHost || room.members.size < 2)) {
+      room.callActive = false;
+      broadcast(roomId, {
+        type: 'callEnded',
+        roomId,
+        endedBy: clientId,
+        endedByName: client.name
+      });
+      console.log(`📴 Call ended in room ${roomId} due to leave of ${client.name}`);
+    } else {
+      // Notify remaining members
+      broadcast(roomId, {
+        type: 'memberLeft',
+        roomId,
+        name: client.name,
+        memberId: clientId
+      });
 
-    // Update room members
-    broadcast(roomId, {
-      type: 'roomMembers',
-      roomId,
-      members: getRoomMembers(roomId)
-    });
+      // Update room members
+      broadcast(roomId, {
+        type: 'roomMembers',
+        roomId,
+        members: getRoomMembers(roomId)
+      });
+    }
 
     // Clean up empty room
     if (room.members.size === 0) {
@@ -703,17 +727,46 @@ const handleEndCall = (clientId, message) => {
   const room = rooms.get(roomId);
 
   if (room) {
-    room.callActive = false;
+    const isHost = room.members.get(clientId)?.isHost;
 
-    // Notify all members that call has ended
-    broadcast(roomId, {
-      type: 'callEnded',
-      roomId,
-      endedBy: clientId,
-      endedByName: client.name
-    });
+    if (isHost || room.members.size <= 2) {
+      room.callActive = false;
 
-    console.log(`📴 Call ended in room ${roomId} by ${client.name}`);
+      // Notify all members that call has ended
+      broadcast(roomId, {
+        type: 'callEnded',
+        roomId,
+        endedBy: clientId,
+        endedByName: client.name
+      });
+
+      console.log(`📴 Call ended in room ${roomId} by ${client.name}`);
+    } else {
+      // Non-host manual end call, room continues
+      console.log(`🏃 Non-host ${client.name} ended their call early. Room ${roomId} continues.`);
+      
+      room.members.delete(clientId);
+      
+      broadcast(roomId, {
+        type: 'memberLeft',
+        roomId,
+        name: client.name,
+        memberId: clientId
+      });
+      
+      broadcast(roomId, {
+        type: 'roomMembers',
+        roomId,
+        members: getRoomMembers(roomId)
+      });
+      
+      sendToClient(clientId, {
+        type: 'leftRoom',
+        roomId
+      });
+      
+      client.roomId = null;
+    }
   }
 };
 

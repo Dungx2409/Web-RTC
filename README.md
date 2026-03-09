@@ -1,332 +1,136 @@
-# WebRTC Meet - Video Calling System with TURN Support
+# Đồ án Hệ Thống Video Call Nhóm WebRTC (Mesh Topology)
 
-Hệ thống gọi video WebRTC hỗ trợ STUN/TURN và Group Call (Mesh Topology).
 
-## 📋 Tính năng
+## Cấu trúc thư mục
 
-### A. TURN / Kết nối qua Internet
-- ✅ **A1**: Cấu hình ICE servers với STUN + TURN (UDP/TCP/TLS)
-- ✅ **A2**: Tự động fallback - hiển thị thông báo khi P2P thất bại, sử dụng TURN relay
-- ✅ **A3**: Báo cáo thống kê - hiển thị connectionState, iceConnectionState, candidate type
+*   `server/`: Signaling Server viết bằng Node.js (dùng Express và `ws` WebSocket).
+*   `frontend/`: Client App viết bằng React + Vite + TailwindCSS.
 
-### B. Room & Group Call
-- ✅ **B1**: Tạo/Tham gia phòng với nickname và roomId
-- ✅ **B2**: Gọi nhóm (mesh topology) - mỗi client tạo n-1 peer connections
-- ✅ **B3**: Quản lý trạng thái - Hangup, leaveRoom, dọn dẹp state
+## 1. Yêu cầu hệ thống
 
-## 🏗️ Kiến trúc
+*   Node.js v16 trở lên
+*   Trình duyệt hỗ trợ WebRTC API (Chrome, Firefox, Safari, Edge...)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                          Architecture                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────┐       WebSocket        ┌───────────────────┐     │
-│  │ Client 1 │◄─────────────────────►│                   │     │
-│  └──────────┘                        │   Signaling       │     │
-│       ▲                              │   Server          │     │
-│       │ P2P/TURN                     │   (Node.js)       │     │
-│       ▼                              │                   │     │
-│  ┌──────────┐       WebSocket        │                   │     │
-│  │ Client 2 │◄─────────────────────►│                   │     │
-│  └──────────┘                        └───────────────────┘     │
-│       ▲                                                         │
-│       │ P2P/TURN                                               │
-│       ▼                              ┌───────────────────┐     │
-│  ┌──────────┐                        │   TURN Server     │     │
-│  │ Client 3 │◄──────────────────────►│   (coturn)        │     │
-│  └──────────┘       Relay            └───────────────────┘     │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+## 2. Cài đặt
 
-## 📁 Cấu trúc thư mục
-
-```
-Web-RTC/
-├── frontend/               # React + Vite frontend
-│   ├── src/
-│   │   ├── components/    # UI Components
-│   │   ├── context/       # React Context (AppContext)
-│   │   ├── services/      # WebRTC & Signaling services
-│   │   │   ├── config.js  # Cấu hình ICE servers
-│   │   │   ├── signaling.js # WebSocket signaling
-│   │   │   └── webrtc.js  # WebRTC peer connections
-│   │   └── data/          # Mock data & utilities
-│   ├── .env               # Environment variables
-│   └── package.json
-├── server/                # Node.js Signaling Server
-│   ├── server.js          # WebSocket signaling server
-│   └── package.json
-├── turn/                  # TURN Server (coturn)
-│   ├── docker-compose.yml
-│   ├── turnserver.conf
-│   └── README.md
-├── report.md              # Báo cáo thử nghiệm
-└── README.md              # File này
-```
-
-## 🚀 Hướng dẫn cài đặt và chạy
-
-### Yêu cầu
-- Node.js >= 18
-- Docker (cho TURN server)
-- Trình duyệt hỗ trợ WebRTC (Chrome, Firefox, Edge)
-
-### 1. Clone và cài đặt dependencies
+Mở Terminal và clone code về:
 
 ```bash
-# Frontend
-cd frontend
-npm install
-
-# Server
-cd ../server
-npm install
+git clone https://github.com/Dungx2409/Web-RTC.git
+cd Web-RTC
 ```
 
-### 2. Khởi động TURN Server (tùy chọn, cho test qua mạng)
+**Cài đặt các thư viện cần thiết:**
 
-```bash
-cd turn
-docker-compose up -d
-```
-
-### 3. Khởi động Signaling Server
-
+Mở Terminal 1 (cho thư mục Backend):
 ```bash
 cd server
-npm run dev
-# Server chạy tại ws://localhost:3001
+npm install
 ```
 
-### 4. Khởi động Frontend
-
+Mở Terminal 2 (cho thư mục Frontend):
 ```bash
 cd frontend
-npm run dev
-# App chạy tại http://localhost:5173
+npm install
 ```
 
-### 5. Test
+## 3. Cách chạy ứng dụng
 
-1. Mở 2 tab trình duyệt tại `http://localhost:5173`
-2. Tab 1: Nhập tên, click "Create Room"
-3. Tab 2: Nhập tên và Room ID từ Tab 1, click "Join Room"
-4. Click "Start Call" để bắt đầu cuộc gọi nhóm
+Đồ án có 2 cách chạy chính: chạy Local trên máy để test nhanh, hoặc Deploy thẳng nhóm Backend/Frontend lên Render/Vercel.
 
----
+### Cách 1: Chạy Local (Môi trường dev trên máy tính)
 
-## 🚢 Deploy lên Production
+*   **Chạy Backend (Signaling Server):**
+    ```bash
+    cd server
+    npm run dev
+    # Server mặc định sẽ chạy ở ws://localhost:3001
+    ```
+*   **Chạy Frontend (React App):**
+    ```bash
+    cd frontend
+    npm run dev
+    # Web sẽ chạy ở http://localhost:5173
+    ```
+Lúc này bạn có thể mở 2-3 tab ẩn danh trên cùng 1 máy tính bằng đường link `http://localhost:5173` để test chức năng tạo và gọi video vào cùng 1 room.
 
-### 🎯 KHUYẾN NGHỊ: Deploy Miễn Phí 100% 
+*(Mẹo test cho thiết bị khác mạng WLAN: Nếu bạn dùng ngrok, hãy chạy `ngrok http 5173` để lấy link HTTPS public test trên điện thoại)*
 
-**💰 Chi phí: $0/tháng** - Render.com + Free TURN
+### Cách 2: Deploy lên thực tế (Ví dụ: Web Service của Render & Vercel)
 
-**⏱️ Thời gian: 15 phút** - Chỉ 3 bước đơn giản!
+*   **Deploy Backend:** Đẩy nguyên folder `server` lên Web Service của Render. Biến môi trường mặc định là chạy port Render tự cấp. Render sẽ tự cung cấp link wss:// cho bạn.
+*   **Deploy Frontend:** Đẩy module `frontend` lên Vercel hoặc Render Static Web. Trên Vercel, bạn vào mục Environment Variables, thêm biến môi trường là URL của tín hiệu Render ở trên: `VITE_SIGNALING_URL=wss://<link-render-app>.onrender.com`.
 
-👉 **[DEPLOY_QUICK.md](./DEPLOY_QUICK.md)** - Bắt đầu từ đây! ⚡
+## 4. Cấu hình TURN Server (Metered Cloud API)
 
-<details>
-<summary><b>📖 Xem hướng dẫn đầy đủ</b></summary>
+Hệ thống tự động ưu tiên kết nối ngang hàng P2P (Host/STUN) trước, nếu mạng quá kém bị chặn port, nó sẽ fallback sang dùng relay TURN server sau 10 giây.
 
-**Chi tiết từng bước:**
-- **[DEPLOYMENT_RENDER_FREE.md](./DEPLOYMENT_RENDER_FREE.md)** - Hướng dẫn đầy đủ với screenshots
-- **[DEPLOYMENT_CHECKLIST_FREE.md](./DEPLOYMENT_CHECKLIST_FREE.md)** - Checklist tick từng bước
+Vì Render không hỗ trợ cấp phát cổng UDP cho WebRTC nên việc dùng Docker tự chạy ứng dụng Coturn trên Web Service là bất khả thi.
+Giải pháp tối ưu và thực tế nhất được cài đặt sẵn trong codebase là sử dụng **TURN API Cloud của Metered**.
 
-**Tóm tắt:**
-```bash
-# 1. Push lên GitHub
-git push origin main
+**Cách lấy mã cấu hình:**
+1. Truy cập [Metered TURN](https://www.metered.ca/tools/openrelay) và đăng ký tài khoản miễn phí.
+2. Bạn sẽ nhận được 1 URL API có dạng: `https://<ten-project>.metered.ca/api/v1/turn/credentials?apiKey=<MA-API-KEY>`
+3. Copy toàn bộ URL API đó.
 
-# 2. Deploy trên Render.com
-# - Import GitHub repo
-# - Render tự động detect render.yaml
-# - Deploy 2 services cùng lúc (frontend + backend)
-
-# 3. Cập nhật Signaling URL
-# - Copy URL backend
-# - Update trong frontend environment variables
-# - Redeploy
-
-# ✅ Done! Test tại: https://webrtc-frontend-xxx.onrender.com
+### Cấu hình lúc chạy Local (Máy tính cá nhân):
+1. Tại thư mục `frontend`, tạo một file tên là `.env.local`
+2. Mở file đó lên và dán dòng này vào:
+```env
+VITE_METERED_TURN_URL=https://<ten-project>.metered.ca/api/v1/turn/credentials?apiKey=<MA-API-KEY>
 ```
+3. Chạy `npm run dev` như bình thường. Vite sẽ tự nạp TURN server vào config.
 
-**Free TURN Server:** OpenRelay (đã config sẵn, không cần setup gì)
+### Cấu hình lúc Release (Render / Vercel):
+1. Vào trang Dashboard quản lý dự án Frontend (trên Vercel/Render).
+2. Tìm đến mục **Settings $\rightarrow$ Environment Variables**.
+3. Bấm Add New Variable:
+   - **Key:** `VITE_METERED_TURN_URL`
+   - **Value:** Dán cái link URL API Metered của bạn vào.
+4. Lưu lại và bấm **Redeploy** là xong! Project tải lên mạng sẽ tự động sở hữu dàn TURN đa năng vượt mọi loại Firewall 4G.
+## 5. Hướng dẫn Test nghiệm thu đồ án (Room, P2P, và TURN)
 
-**Kết quả:**
-- Frontend: `https://webrtc-frontend-xxx.onrender.com`
-- Backend: `wss://webrtc-signaling-xxx.onrender.com`
-- TURN: Free OpenRelay (shared)
+### A. Test gọi nhóm trong Room cùng mạng
+1. Mở 2 hoặc 3 cửa sổ trình duyệt (hoặc tải web từ link Render/Vercel).
+2. **Cửa Sổ 1**: Nhập Nickname "User 1", nhấn **Create Room**. Copy mã `Room ID` vừa hiện ra.
+3. Các **Cửa Sổ còn lại**: Lần lượt nhập Nickname, dán mã `Room ID` trên và nhấn **Join Room**. Mọi người sẽ tụ tập lại ở Sảnh Chờ.
+4. Host (User 1) nhấn **Start Group Call**. Hệ thống tự động thiết lập Mesh đa chiều. 
+5. Sẽ thấy Grid Layout chia đều màn hình các video.
+6. Kiểm tra trong Static hoặc log sẽ thấy đang sử dụng P2P server - Host STUN server (HOST)
 
-</details>
+### B. Test gọi nhóm trong Room khác mạng
+1. Dùng laptop mở 1 cửa sổ trình duyệt.
+2. **Cửa Sổ 1**: Nhập Nickname "User 1", nhấn **Create Room**. Copy mã `Room ID` vừa hiện ra.
+3. Dùng thiết bị khác sử dụng mạng khác và mở 1 cửa sổ trình duyệt.
+4. Lần lượt nhập Nickname, dán mã `Room ID` trên và nhấn **Join Room**. Mọi người sẽ tụ tập lại ở Sảnh Chờ.
+5. Host (User 1) nhấn **Start Group Call**. Hệ thống tự động thiết lập Mesh đa chiều. 
+6. Sẽ thấy Grid Layout chia đều màn hình các video.
+7. Kiểm tra trong Static hoặc log sẽ thấy đang sử dụng P2P server - Host STUN server (SRFLX)
 
----
+### C. Test kịch bản "Xin phép vào phòng đang họp"
+1. Đang có 2, 3 bạn đang họp nhóm Mesh trong Room.
+2. Ném link Room ID cho 1 **người thứ N**. Người này cố gắng Join lúc các bạn trong phòng đang bật cam họp.
+3. Màn hình người mới sẽ hiện trạng thái đứng chờ **"Waiting for Host Approval"**, tránh việc đánh sập luồng video đột ngột.
+4. Màn hình của Host sẽ nhảy notification, Host bấm ✓ thì luồng P2P mới bắt đầu kéo node mới này vào.
+5. Nếu deny thì người thứ N sẽ bị đẩy ra màn hình dashboard.
 
-### 🏢 Phương án nâng cao: Deploy với VPS
+### D. Test kịch bản cúp máy và dọn Socket
+1. Đang Mesh lưới 4 Người $\rightarrow$ Người thứ 2 bấm nút **Hangup** đỏ chót rời đi. Video người này biến mất nhẹ nhàng nhưng 3 người còn lại cam vẫn trong, không đứt kết nối. P2P đã được xóa thành công cho riêng socket người 2.
+2. Host bấm nút **Hangup**. Cả phòng thoát, tự động đá tất cả ra. Host có thể tiếp tục tạo phòng mới ở trang chủ bình thường (tài nguyên RAM trên node.js đã được sweep sạch).
 
-**Chi phí: ~$12/tháng** | **Cho production, nhiều users**
+### E. Test chức năng Fallback qua TURN Server bằng 4G
+1. Lấy Máy Laptop (bắt WiFi) $\rightarrow$ Dùng Điện Thoại (Tắt WiFi, Bật 4G phát mạng).
+2. Dùng Điện thoại tải web, tạo Room (làm Host), laptop Copy Room ID vào the. 
+3. *Trường hợp Firewall mạng chặn P2P UDP ngang hàng*: Màn hình sẽ Load lâu hơn chút và hiện Toast Cảnh Báo: **"P2P failed, trying TURN relay..."** ngay tại cột mốc 10 giây (cấu hình biến số `P2P_TIMEOUT`).
+4. Lúc này, candidate đẩy fallback dùng mảng Relay TURN Server, 5 giây sau hình ảnh xuất hiện.
+5. Xem log chứng minh: 
+   - Click nút cờ lê `[Stats]` dưới màn hình để bật **Debug Panel**. Panel này giả lập log console chọc xuống.
+   - App lọc log lấy `pc.getStats()`, bóc trần kiểu candidate và bắn dòng log server: `🔗 P2P Connection: User 1
 
-👉 **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deploy với TURN server riêng trên VPS
-
-**Bao gồm:**
-- Setup TURN server riêng (Coturn)
-- Deploy Backend lên Render
-- Deploy Frontend lên Vercel
-- Tốc độ cao, bandwidth không giới hạn
-
----
-
-### 🤔 Không biết chọn phương án nào?
-
-👉 **[START_HERE.md](./START_HERE.md)** - So sánh và chọn phương án phù hợp
-
-**Khuyến nghị:** Bắt đầu với **miễn phí**, nâng cấp sau khi có users.
-
----
-
----
-
-## 🔧 Cấu hình
-
-### Environment Variables (Frontend)
-
-```bash
-# .env
-VITE_SIGNALING_URL=ws://localhost:3001
-VITE_P2P_TIMEOUT=10000
-VITE_STUN_URL=stun:stun.l.google.com:19302
-VITE_TURN_UDP_URL=turn:localhost:3478?transport=udp
-VITE_TURN_TCP_URL=turn:localhost:3478?transport=tcp
-VITE_TURN_TLS_URL=turns:localhost:5349?transport=tcp
-VITE_TURN_USERNAME=webrtc
-VITE_TURN_PASSWORD=webrtc123
-```
-
-### ICE Servers Configuration
-
-Cấu hình ICE servers nằm trong `frontend/src/services/config.js`:
-
-```javascript
-iceServers: [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'turn:HOST:3478?transport=udp', username: 'user', credential: 'pass' },
-  { urls: 'turn:HOST:3478?transport=tcp', username: 'user', credential: 'pass' },
-  { urls: 'turns:HOST:5349?transport=tcp', username: 'user', credential: 'pass' }
-]
-```
-
-## 📡 Signaling Protocol
-
-| Message Type | Direction | Description |
-|-------------|-----------|-------------|
-| `register` | Client → Server | Đăng ký tên người dùng |
-| `createRoom` | Client → Server | Tạo phòng mới |
-| `joinRoom` | Client → Server | Tham gia phòng |
-| `roomMembers` | Server → Client | Danh sách thành viên |
-| `startCall` | Client → Server | Bắt đầu cuộc gọi |
-| `offer` | Client → Server → Client | WebRTC offer SDP |
-| `answer` | Client → Server → Client | WebRTC answer SDP |
-| `candidate` | Client → Server → Client | ICE candidate |
-| `leaveRoom` | Client → Server | Rời phòng |
-| `memberLeft` | Server → Client | Thông báo người rời |
-| `endCall` | Client → Server | Kết thúc cuộc gọi |
-
-### Ví dụ Message
-
-```json
-// Register
-{ "type": "register", "name": "Alice" }
-
-// Create Room
-{ "type": "createRoom", "roomId": "abc-def-ghi", "name": "Alice" }
-
-// Offer
-{ 
-  "type": "offer", 
-  "roomId": "abc-def-ghi", 
-  "sender": "client-id-1", 
-  "target": "client-id-2", 
-  "offer": { "type": "offer", "sdp": "..." }
-}
-
-// Candidate
-{
-  "type": "candidate",
-  "roomId": "abc-def-ghi",
-  "sender": "client-id-1",
-  "target": "client-id-2",
-  "candidate": { "candidate": "...", "sdpMid": "0", "sdpMLineIndex": 0 }
-}
-```
-
-## 📊 Thống kê WebRTC
-
-Hệ thống thu thập và hiển thị các thống kê sau:
-
-- **Connection State**: new/connecting/connected/disconnected/failed
-- **ICE State**: new/checking/connected/completed/failed
-- **Candidate Type**: host/srflx/relay
-- **Traffic**: bytes/packets sent/received
-- **Quality**: jitter, round-trip time, packet loss
-- **Media**: video resolution, frame rate, codecs
-
-Click biểu tượng "Statistics" trên thanh điều khiển để xem chi tiết.
-
-## 🔐 TURN Server
-
-### Sử dụng Coturn (Docker)
-
-```bash
-cd turn
-docker-compose up -d
-
-# Kiểm tra logs
-docker logs webrtc-turn-server
-```
-
-### Credentials mặc định
-- Username: `webrtc`
-- Password: `webrtc123`
-
-### Test TURN Server
-
-Sử dụng [Trickle ICE](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/):
-1. Thêm TURN URL: `turn:YOUR_IP:3478`
-2. Nhập username/password
-3. Click "Gather candidates"
-4. Kiểm tra có "relay" candidate không
-
-## 🧪 Testing
-
-### Test cùng LAN
-1. 2 thiết bị cùng mạng WiFi
-2. Truy cập qua IP local (ví dụ: `http://192.168.1.100:5173`)
-3. Kỳ vọng: Kết nối P2P (host candidate)
-
-### Test khác mạng (4G)
-1. 1 thiết bị dùng WiFi, 1 thiết bị dùng 4G
-2. Cần TURN server với public IP
-3. Kỳ vọng: Kết nối qua TURN relay
-
-Xem chi tiết kết quả test trong [report.md](./report.md)
-
-## 🐛 Troubleshooting
-
-### Không kết nối được camera/mic
-- Kiểm tra permission trong trình duyệt
-- Đảm bảo không có ứng dụng khác đang sử dụng
-
-### Không thể kết nối P2P
-- Kiểm tra firewall
-- Thử sử dụng TURN server
-- Xem console log để biết ICE state
-
-### TURN không hoạt động
-- Kiểm tra TURN server đang chạy
-- Kiểm tra credentials đúng
-- Kiểm tra firewall mở port 3478/5349
-
-## 📝 License
-
-MIT License
+### F. Test chức năng Fallback qua TURN Server bằng cơ chế có sẵn
+1. Khi vào cuộc họp, ở phần cài đặt, điều chỉnh ICE transport policy thành `relay only`.
+2. Sau đó end cuộc gọi và tạo lại.
+3. Lúc này, candidate đẩy fallback dùng mảng Relay TURN Server
+4. Xem log chứng minh: 
+   - Click nút cờ lê `[Stats]` dưới màn hình để bật **Debug Panel**. Panel này giả lập log console chọc xuống.
+   - App lọc log lấy `pc.getStats()`, bóc trần kiểu candidate và bắn dòng log server: `🔗 P2P Connection: User 1 <-> User 2 via [TURN Relay]`. 
