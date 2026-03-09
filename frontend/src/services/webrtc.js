@@ -300,6 +300,13 @@ class WebRTCService {
         }
       }
 
+      // Dispatch event to log connection type to server
+      try {
+        window.dispatchEvent(new CustomEvent('webrtc-connection-type', {
+          detail: { peerId, peerName, candidateType }
+        }));
+      } catch (e) {}
+
       return { candidateType, localCandidate, remoteCandidate };
     } catch (error) {
       console.error('Failed to get candidate stats:', error);

@@ -600,6 +600,19 @@ export const AppProvider = ({ children }) => {
         setTimeout(() => setNotification(null), 3000);
       }
     };
+
+    // Listen for custom connection type event
+    const handleConnectionTypeLog = (event) => {
+      const { peerId, peerName, candidateType } = event.detail;
+      if (roomIdRef.current) {
+        signalingService.logConnectionType(roomIdRef.current, peerId, candidateType);
+      }
+    };
+    window.addEventListener('webrtc-connection-type', handleConnectionTypeLog);
+
+    return () => {
+      window.removeEventListener('webrtc-connection-type', handleConnectionTypeLog);
+    };
   }, [updateOverallConnectionState, updateOverallIceState]);
 
   // Create room

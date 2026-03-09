@@ -252,6 +252,18 @@ class SignalingService {
   }
 
   /**
+   * Log connection type to server
+   */
+  logConnectionType(roomId, target, candidateType) {
+    this.send({
+      type: 'logConnectionType',
+      roomId,
+      target,
+      candidateType
+    });
+  }
+
+  /**
    * Send offer to peer
    */
   sendOffer(roomId, target, offer) {

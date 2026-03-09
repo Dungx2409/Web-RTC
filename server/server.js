@@ -46,7 +46,7 @@ let server;
 if (USE_HTTPS) {
   const certPath = process.env.CERT_PATH || './cert.pem';
   const keyPath = process.env.KEY_PATH || './key.pem';
-  
+
   try {
     const options = {
       cert: fs.readFileSync(certPath),
@@ -74,17 +74,17 @@ const originalError = console.error;
 
 const broadcastServerLog = (level, ...args) => {
   try {
-    const message = args.map(arg => 
+    const message = args.map(arg =>
       typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
     ).join(' ');
-    
+
     const logData = JSON.stringify({
       type: 'serverLog',
       level,
       message,
       timestamp: new Date().toISOString()
     });
-    
+
     // Broadcast to all connected clients
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
@@ -121,7 +121,7 @@ const generateClientId = () => uuidv4();
 const broadcast = (roomId, message, excludeClientId = null) => {
   const room = rooms.get(roomId);
   if (!room) return;
-  
+
   room.members.forEach((memberInfo, clientId) => {
     if (clientId !== excludeClientId) {
       const client = clients.get(clientId);
@@ -142,7 +142,7 @@ const sendToClient = (clientId, message) => {
 const getRoomMembers = (roomId) => {
   const room = rooms.get(roomId);
   if (!room) return [];
-  
+
   const members = [];
   room.members.forEach((memberInfo, clientId) => {
     members.push({
@@ -157,14 +157,14 @@ const getRoomMembers = (roomId) => {
 const cleanupClient = (clientId) => {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const { roomId, name } = client;
-  
+
   if (roomId) {
     const room = rooms.get(roomId);
     if (room) {
       room.members.delete(clientId);
-      
+
       // Notify remaining members
       broadcast(roomId, {
         type: 'memberLeft',
@@ -172,14 +172,14 @@ const cleanupClient = (clientId) => {
         name,
         memberId: clientId
       });
-      
+
       // Update room members list
       broadcast(roomId, {
         type: 'roomMembers',
         roomId,
         members: getRoomMembers(roomId)
       });
-      
+
       // Clean up empty room
       if (room.members.size === 0) {
         rooms.delete(roomId);
@@ -187,7 +187,7 @@ const cleanupClient = (clientId) => {
       }
     }
   }
-  
+
   clients.delete(clientId);
   console.log(`👋 Client disconnected: ${name || clientId}`);
 };
@@ -196,15 +196,15 @@ const cleanupClient = (clientId) => {
 wss.on('connection', (ws) => {
   const clientId = generateClientId();
   clients.set(clientId, { ws, name: null, roomId: null });
-  
+
   console.log(`🔌 New connection: ${clientId}`);
-  
+
   // Send client their ID
   ws.send(JSON.stringify({
     type: 'connected',
     clientId
   }));
-  
+
   ws.on('message', (data) => {
     try {
       const message = JSON.parse(data);
@@ -217,11 +217,11 @@ wss.on('connection', (ws) => {
       }));
     }
   });
-  
+
   ws.on('close', () => {
     cleanupClient(clientId);
   });
-  
+
   ws.on('error', (err) => {
     console.error(`WebSocket error for ${clientId}:`, err);
     cleanupClient(clientId);
@@ -232,9 +232,9 @@ wss.on('connection', (ws) => {
 const handleMessage = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   console.log(`📨 [${client.name || clientId}] ${message.type}`);
-  
+
   switch (message.type) {
     case 'register':
       handleRegister(clientId, message);
@@ -272,6 +272,9 @@ const handleMessage = (clientId, message) => {
     case 'endCall':
       handleEndCall(clientId, message);
       break;
+    case 'logConnectionType':
+      handleLogConnectionType(clientId, message);
+      break;
     default:
       console.warn(`Unknown message type: ${message.type}`);
   }
@@ -283,7 +286,7 @@ const handleRegister = (clientId, message) => {
   if (client) {
     client.name = message.name;
     console.log(`✅ Registered: ${message.name} (${clientId})`);
-    
+
     sendToClient(clientId, {
       type: 'registered',
       name: message.name,
@@ -295,9 +298,9 @@ const handleRegister = (clientId, message) => {
 const handleCreateRoom = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const roomId = message.roomId || uuidv4().substring(0, 8);
-  
+
   // Check if room already exists
   if (rooms.has(roomId)) {
     sendToClient(clientId, {
@@ -307,7 +310,7 @@ const handleCreateRoom = (clientId, message) => {
     });
     return;
   }
-  
+
   // Create new room
   const room = {
     id: roomId,
@@ -316,18 +319,18 @@ const handleCreateRoom = (clientId, message) => {
     callActive: false,
     createdAt: new Date().toISOString()
   };
-  
+
   room.members.set(clientId, {
     name: message.name || client.name,
     isHost: true
   });
-  
+
   rooms.set(roomId, room);
   client.roomId = roomId;
   client.name = message.name || client.name;
-  
+
   console.log(`🏠 Room created: ${roomId} by ${client.name}`);
-  
+
   sendToClient(clientId, {
     type: 'roomCreated',
     roomId,
@@ -339,9 +342,9 @@ const handleCreateRoom = (clientId, message) => {
 const handleJoinRoom = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const { roomId, name } = message;
-  
+
   // Check if room exists
   if (!rooms.has(roomId)) {
     sendToClient(clientId, {
@@ -351,13 +354,13 @@ const handleJoinRoom = (clientId, message) => {
     });
     return;
   }
-  
+
   const room = rooms.get(roomId);
-  
+
   // Store client name early
   client.name = name || client.name;
   client.roomId = roomId;
-  
+
   // If call is active, don't add to room directly — require approval
   if (room.callActive) {
     sendToClient(clientId, {
@@ -368,15 +371,15 @@ const handleJoinRoom = (clientId, message) => {
     console.log(`⏳ ${client.name} is waiting for approval to join room ${roomId}`);
     return;
   }
-  
+
   // Call not active — add directly to room
   room.members.set(clientId, {
     name: client.name,
     isHost: false
   });
-  
+
   console.log(`➡️  ${client.name} joined room ${roomId}`);
-  
+
   // Notify the joining client
   sendToClient(clientId, {
     type: 'roomJoined',
@@ -385,7 +388,7 @@ const handleJoinRoom = (clientId, message) => {
     members: getRoomMembers(roomId),
     callActive: room.callActive
   });
-  
+
   // Notify existing members about new member
   broadcast(roomId, {
     type: 'memberJoined',
@@ -396,7 +399,7 @@ const handleJoinRoom = (clientId, message) => {
       isHost: false
     }
   }, clientId);
-  
+
   // Send updated member list to all
   broadcast(roomId, {
     type: 'roomMembers',
@@ -408,13 +411,13 @@ const handleJoinRoom = (clientId, message) => {
 const handleLeaveRoom = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client || !client.roomId) return;
-  
+
   const { roomId } = client;
   const room = rooms.get(roomId);
-  
+
   if (room) {
     room.members.delete(clientId);
-    
+
     // Notify remaining members
     broadcast(roomId, {
       type: 'memberLeft',
@@ -422,24 +425,24 @@ const handleLeaveRoom = (clientId, message) => {
       name: client.name,
       memberId: clientId
     });
-    
+
     // Update room members
     broadcast(roomId, {
       type: 'roomMembers',
       roomId,
       members: getRoomMembers(roomId)
     });
-    
+
     // Clean up empty room
     if (room.members.size === 0) {
       rooms.delete(roomId);
       console.log(`🗑️  Room ${roomId} deleted (empty)`);
     }
   }
-  
+
   client.roomId = null;
   console.log(`⬅️  ${client.name} left room ${roomId}`);
-  
+
   sendToClient(clientId, {
     type: 'leftRoom',
     roomId
@@ -449,11 +452,11 @@ const handleLeaveRoom = (clientId, message) => {
 const handleStartCall = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client || !client.roomId) return;
-  
+
   const { roomId } = client;
   const room = rooms.get(roomId);
   if (!room) return;
-  
+
   // Only host can start the call
   const memberInfo = room.members.get(clientId);
   if (!memberInfo || !memberInfo.isHost) {
@@ -463,7 +466,7 @@ const handleStartCall = (clientId, message) => {
     });
     return;
   }
-  
+
   if (room.members.size < 2) {
     sendToClient(clientId, {
       type: 'error',
@@ -471,9 +474,9 @@ const handleStartCall = (clientId, message) => {
     });
     return;
   }
-  
+
   room.callActive = true;
-  
+
   // Notify all members that call has started (include Host's iceTransportPolicy for sync)
   broadcast(roomId, {
     type: 'callStarted',
@@ -482,27 +485,27 @@ const handleStartCall = (clientId, message) => {
     initiatorName: client.name,
     iceTransportPolicy: message.iceTransportPolicy || 'all'
   });
-  
+
   console.log(`📞 Call started in room ${roomId} by ${client.name}`);
 };
 
 const handleRequestJoin = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const { roomId, name } = message;
   const room = rooms.get(roomId);
   if (!room) return;
-  
+
   // Update client name
   client.name = name || client.name;
   client.roomId = roomId;
-  
+
   // Add to pending requests
   room.pendingRequests.set(clientId, {
     name: client.name
   });
-  
+
   // Find the host and forward the request
   room.members.forEach((memberInfo, memberId) => {
     if (memberInfo.isHost) {
@@ -514,18 +517,18 @@ const handleRequestJoin = (clientId, message) => {
       });
     }
   });
-  
+
   console.log(`🙋 ${client.name} requested to join room ${roomId}`);
 };
 
 const handleApproveJoin = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const { roomId, requesterId } = message;
   const room = rooms.get(roomId);
   if (!room) return;
-  
+
   // Only host can approve
   const memberInfo = room.members.get(clientId);
   if (!memberInfo || !memberInfo.isHost) {
@@ -535,7 +538,7 @@ const handleApproveJoin = (clientId, message) => {
     });
     return;
   }
-  
+
   // Get pending request info
   const pendingInfo = room.pendingRequests.get(requesterId);
   if (!pendingInfo) {
@@ -545,10 +548,10 @@ const handleApproveJoin = (clientId, message) => {
     });
     return;
   }
-  
+
   // Remove from pending
   room.pendingRequests.delete(requesterId);
-  
+
   // Add requester to room members
   const requesterClient = clients.get(requesterId);
   if (!requesterClient || requesterClient.ws.readyState !== WebSocket.OPEN) {
@@ -558,16 +561,16 @@ const handleApproveJoin = (clientId, message) => {
     });
     return;
   }
-  
+
   room.members.set(requesterId, {
     name: pendingInfo.name,
     isHost: false
   });
-  
+
   requesterClient.roomId = roomId;
-  
+
   console.log(`✅ ${pendingInfo.name} approved to join room ${roomId}`);
-  
+
   // Notify the requester that they've been approved
   sendToClient(requesterId, {
     type: 'joinApproved',
@@ -576,7 +579,7 @@ const handleApproveJoin = (clientId, message) => {
     members: getRoomMembers(roomId),
     callActive: room.callActive
   });
-  
+
   // Notify existing members about new member
   broadcast(roomId, {
     type: 'memberJoined',
@@ -587,7 +590,7 @@ const handleApproveJoin = (clientId, message) => {
       isHost: false
     }
   }, requesterId);
-  
+
   // Send updated member list to all
   broadcast(roomId, {
     type: 'roomMembers',
@@ -599,11 +602,11 @@ const handleApproveJoin = (clientId, message) => {
 const handleRejectJoin = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client) return;
-  
+
   const { roomId, requesterId } = message;
   const room = rooms.get(roomId);
   if (!room) return;
-  
+
   // Only host can reject
   const memberInfo = room.members.get(clientId);
   if (!memberInfo || !memberInfo.isHost) {
@@ -613,36 +616,36 @@ const handleRejectJoin = (clientId, message) => {
     });
     return;
   }
-  
+
   // Get pending request info
   const pendingInfo = room.pendingRequests.get(requesterId);
   if (!pendingInfo) return;
-  
+
   // Remove from pending
   room.pendingRequests.delete(requesterId);
-  
+
   // Notify the requester they've been rejected
   sendToClient(requesterId, {
     type: 'joinRejected',
     roomId,
     reason: 'The host declined your request to join'
   });
-  
+
   // Also clear their roomId reference
   const requesterClient = clients.get(requesterId);
   if (requesterClient) {
     requesterClient.roomId = null;
   }
-  
+
   console.log(`❌ ${pendingInfo.name} rejected from room ${roomId}`);
 };
 
 const handleOffer = (clientId, message) => {
   const { roomId, target, offer } = message;
   const client = clients.get(clientId);
-  
+
   if (!client) return;
-  
+
   // Forward offer to target
   sendToClient(target, {
     type: 'offer',
@@ -652,16 +655,16 @@ const handleOffer = (clientId, message) => {
     target,
     offer
   });
-  
+
   console.log(`📤 Offer: ${client.name} -> ${target}`);
 };
 
 const handleAnswer = (clientId, message) => {
   const { roomId, target, answer } = message;
   const client = clients.get(clientId);
-  
+
   if (!client) return;
-  
+
   // Forward answer to target
   sendToClient(target, {
     type: 'answer',
@@ -671,16 +674,16 @@ const handleAnswer = (clientId, message) => {
     target,
     answer
   });
-  
+
   console.log(`📥 Answer: ${client.name} -> ${target}`);
 };
 
 const handleCandidate = (clientId, message) => {
   const { roomId, target, candidate } = message;
   const client = clients.get(clientId);
-  
+
   if (!client) return;
-  
+
   // Forward ICE candidate to target
   sendToClient(target, {
     type: 'candidate',
@@ -695,13 +698,13 @@ const handleCandidate = (clientId, message) => {
 const handleEndCall = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client || !client.roomId) return;
-  
+
   const { roomId } = client;
   const room = rooms.get(roomId);
-  
+
   if (room) {
     room.callActive = false;
-    
+
     // Notify all members that call has ended
     broadcast(roomId, {
       type: 'callEnded',
@@ -709,8 +712,23 @@ const handleEndCall = (clientId, message) => {
       endedBy: clientId,
       endedByName: client.name
     });
-    
+
     console.log(`📴 Call ended in room ${roomId} by ${client.name}`);
+  }
+};
+
+const handleLogConnectionType = (clientId, message) => {
+  const client = clients.get(clientId);
+  if (!client) return;
+
+  const { target, candidateType } = message;
+  const targetClient = clients.get(target);
+  
+  if (targetClient) {
+    const typeLabel = candidateType === 'relay' ? 'TURN Relay' : 
+                      candidateType === 'host' ? 'Local Host' : 
+                      candidateType === 'srflx' ? 'STUN Server Reflexive' : candidateType;
+    console.log(`🔗 P2P Connection: ${client.name} <-> ${targetClient.name} via [${typeLabel}]`);
   }
 };
 
@@ -742,7 +760,7 @@ app.get('/api/rooms/:roomId', (req, res) => {
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
   }
-  
+
   res.json({
     id: room.id,
     memberCount: room.members.size,
