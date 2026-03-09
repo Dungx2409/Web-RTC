@@ -21,24 +21,7 @@ const CallEndedScreen = () => {
           Thank you for using WebRTC Meet
         </p>
 
-        {/* Call Summary (mock) */}
-        <div className="bg-meet-gray/30 rounded-xl p-6 mb-6 max-w-sm mx-auto">
-          <h3 className="text-sm text-meet-light-gray mb-4">Call Summary</h3>
-          <div className="space-y-2 text-left">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Duration</span>
-              <span className="text-white">15:23</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Participants</span>
-              <span className="text-white">4</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Connection</span>
-              <span className="text-meet-yellow">TURN Relay</span>
-            </div>
-          </div>
-        </div>
+
 
         {/* Back to Home Button */}
         <button
