@@ -245,7 +245,9 @@ const handleMessage = (clientId, message) => {
   const client = clients.get(clientId);
   if (!client) return;
 
-  console.log(`📨 [${client.name || clientId}] ${message.type}`);
+  if (message.type !== 'candidate' && message.type !== 'logConnectionType') {
+    console.log(`📨 [${client.name || clientId}] ${message.type}`);
+  }
 
   switch (message.type) {
     case 'register':
