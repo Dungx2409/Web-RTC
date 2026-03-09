@@ -67,6 +67,50 @@ if (USE_HTTPS) {
 // WebSocket server
 const wss = new WebSocket.Server({ server });
 
+// Override console methods to broadcast logs to clients
+const originalLog = console.log;
+const originalWarn = console.warn;
+const originalError = console.error;
+
+const broadcastServerLog = (level, ...args) => {
+  try {
+    const message = args.map(arg => 
+      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(' ');
+    
+    const logData = JSON.stringify({
+      type: 'serverLog',
+      level,
+      message,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Broadcast to all connected clients
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(logData);
+      }
+    });
+  } catch (err) {
+    originalError('Error broadcasting log:', err);
+  }
+};
+
+console.log = (...args) => {
+  originalLog(...args);
+  broadcastServerLog('info', ...args);
+};
+
+console.warn = (...args) => {
+  originalWarn(...args);
+  broadcastServerLog('warn', ...args);
+};
+
+console.error = (...args) => {
+  originalError(...args);
+  broadcastServerLog('error', ...args);
+};
+
 // State management
 const clients = new Map(); // clientId -> { ws, name, roomId }
 const rooms = new Map();   // roomId -> { id, members: Map(clientId -> {name, isHost}), callActive: boolean, pendingRequests: Map(clientId -> {name}) }

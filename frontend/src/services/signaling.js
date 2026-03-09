@@ -178,7 +178,9 @@ class SignalingService {
    * Handle incoming message
    */
   handleMessage(message) {
-    console.log(`📩 Received: ${message.type}`, message);
+    if (message.type !== 'serverLog') {
+      console.log(`📩 Received: ${message.type}`, message);
+    }
     
     const handlers = this.handlers.get(message.type);
     if (handlers) {

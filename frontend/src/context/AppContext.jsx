@@ -57,6 +57,7 @@ export const AppProvider = ({ children }) => {
   // WebRTC stats
   const [callStats, setCallStats] = useState(null);
   const [callDuration, setCallDuration] = useState('00:00:00');
+  const [serverLogs, setServerLogs] = useState([]);
   
   // UI states
   const [showStats, setShowStats] = useState(false);
@@ -250,6 +251,14 @@ export const AppProvider = ({ children }) => {
         // Update client ID when received
         signalingService.on('connected', (msg) => {
           setCurrentUser(prev => ({ ...prev, id: msg.clientId }));
+        });
+        
+        // Receive server logs
+        signalingService.on('serverLog', (msg) => {
+          setServerLogs(prev => {
+            const newLogs = [...prev, msg];
+            return newLogs.length > 200 ? newLogs.slice(newLogs.length - 200) : newLogs;
+          });
         });
         
         // Room created
@@ -806,6 +815,7 @@ export const AppProvider = ({ children }) => {
     joinRequests,
     waitingForApproval,
     activeCallMembers,
+    serverLogs,
     
     // Actions
     setAppState,
