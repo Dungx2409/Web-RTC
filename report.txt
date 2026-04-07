@@ -1,0 +1,793 @@
+\newpage
+
+\section{Tổng quan đồ án}
+Đồ án là ứng dụng \textbf{video call nhóm} sử dụng công nghệ \textbf{WebRTC} với kiến trúc \textbf{Mesh Topology} (mỗi peer kết nối trực tiếp với tất cả peer khác).\\
+
+\begin{itemize}
+    \item Công nghệ sử dụng:
+        \begin{itemize}
+            \item Frontend: React 18, Vite 5, Tailwind CSS 3
+            \item Backend (Signaling): Node.js, Express, WebSocket (`ws`)
+            \item Giao thức: WebRTC, WebSocket, STUN/TURN (ICE)
+            \item Icon: Lucide React
+            \item ID generation: UUID v4
+        \end{itemize}
+    \item Tính năng chính:
+        \begin{itemize}
+            \item Tạo/Tham gia phòng họp bằng Room ID
+            \item Phê duyệt tham gia (Join Requests) khi cuộc gọi đã bắt đầu
+            \item Video call nhóm vòng lặp P2P (mesh topology)
+            \item Bật/tắt camera, micro
+            \item Hiển thị trạng thái kết nối real-time
+            \item Thống kê cuộc gọi (bitrate, codec, resolution, packet loss...)
+            \item Cấu hình ICE linh hoạt, hỗ trợ STUN/TURN server (tự động fallback sang TURN khi P2P thất bại)
+            \item Danh sách phòng đang hoạt động (REST API)
+            \item Giao diện Debug Panel hiển thị realtime Backend Logs và Connection Type
+            \item Auto-reconnect khi mất kết nối WebSocket
+            \item Responsive UI
+        \end{itemize}
+\end{itemize}
+
+\section{Kiến Trúc Hệ Thống}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\textwidth]{img/aaaaa.drawio.png}
+    \caption{Sơ đồ kiến trúc}
+\end{figure}
+
+Mesh Topology: Mỗi participant kết nối trực tiếp P2P với tất cả participant khác. Phù hợp cho nhóm nhỏ (2-6 người). Server chỉ đóng vai trò \textbf{signaling} (trao đổi SDP offer/answer và ICE candidates), Không relay media (trừ khi thông qua TURN server do client tự cấu hình trong kiến trúc).
+
+\section{Cài đặt}
+\begin{itemize}
+    \item Yêu cầu:
+        \begin{itemize}
+            \item Node.js >= 16
+            \item npm hoặc yarn
+        \end{itemize}
+    \item Lệnh cài đặt môi trường:
+        \begin{enumerate}
+            \item \texttt{git clone <repo-url>}
+            \item \texttt{cd Web-RTC/server}
+            \item \texttt{npm install}
+            \item \texttt{cd ../frontend}
+            \item \texttt{npm install}
+        \end{enumerate}
+    \item \textbf{Cách 1: Chạy Local (Môi trường Development trên máy tính)}
+        \begin{itemize}
+            \item Terminal 1 — Chạy Signaling Server:
+                \begin{itemize}
+                    \item \texttt{cd server}
+                    \item \texttt{npm run dev} (Server sẽ chạy ở \texttt{ws://localhost:3001})
+                \end{itemize}
+            \item Terminal 2 — Chạy Frontend:
+                \begin{itemize}
+                    \item \texttt{cd frontend}
+                    \item \texttt{npm run dev} (Web sẽ chạy ở \texttt{http://localhost:5173})
+                \end{itemize}
+        \end{itemize}
+    \item \textbf{Cách 2: Deploy Release (Môi trường Production trên Cloud)}
+        \begin{itemize}
+            \item \textbf{Backend (Signaling Server):} Đẩy thư mục \texttt{server} lên nền tảng Render. Render sẽ tự động tải các package thông qua \texttt{npm install} và chạy \texttt{node server.js}. Web Service này sẽ cung cấp một URL WebSocket bảo mật: \texttt{wss://<ten-app>.onrender.com}.
+            \item \textbf{Frontend (React Client):} Đẩy thư mục \texttt{frontend} lên Vercel hoặc Render Static Sites. Thêm biến môi trường vào cấu hình Deploy: \texttt{VITE\_SIGNALING\_URL = wss://<ten-app>.onrender.com}. Hệ thống Cloud sẽ tự Build Web Tĩnh bằng lệnh \texttt{npm run build}.
+        \end{itemize}
+\end{itemize}
+
+\section{Kiến trúc Backend — Signaling Server}
+Server làm nhiệm vụ \textbf{signaling} — trung gian trao đổi thông tin kết nối giữa các peer. Server không xử lý media (audio/video). Tất cả logs từ server được cấu trúc lại và broadcast xuống frontend.
+
+\subsection{Cấu trúc dữ liệu}
+\begin{itemize}
+    \item \texttt{clients}: \texttt{Map<clientId, \{ ws, name, roomId \}>}: Quản lý tất cả clients đang kết nối
+    \item \texttt{rooms}: \texttt{Map<roomId, \{ id, members, callActive, pendingRequests \}>}: Quản lý tất cả rooms và danh sách người xin vào phòng (Join requests).
+\end{itemize}
+
+\subsection{Các hàm chính}
+\begin{itemize}
+    \item \texttt{generateClientId()}: Tạo UUID v4 duy nhất cho mỗi client kết nối 
+    \item \texttt{broadcast(roomId, message, excludeClientId)}: Gửi message đến tất cả members trong room (trừ sender)
+    \item \texttt{sendToClient(clientId, message)}: Gửi message đến 1 client cụ thể
+    \item \texttt{getRoomMembers(roomId)}: Lấy danh sách members của room (id, name, isHost) 
+    \item \texttt{cleanupClient(clientId)}: Dọn dẹp khi client disconnect: xóa khỏi room, thông báo members, tự động từ chối join request, xóa room nếu trống
+    \item \texttt{broadcastServerLog(level, ...args)}: Chặn các hàm console.log/warn/error và đóng gói thành message \texttt{serverLog} gửi xuống toàn bộ client.
+    \item \texttt{handleMessage(clientId, message)}: Router chính — phân loại message type và gọi handler tương ứng 
+\end{itemize}
+
+\subsection{Các handler xử lý message}
+\begin{table}[H]
+\centering
+\caption{Các handler xử lý message của Signaling Server}
+\begin{tabular}{|l|l|p{7cm}|}
+\hline
+\textbf{Handler} & \textbf{Message Type} & \textbf{Chức năng} \\ \hline
+handleRegister & register & Đăng ký tên người dùng cho client \\ \hline
+handleCreateRoom & createRoom & Tạo room mới, client trở thành host \\ \hline
+handleJoinRoom & joinRoom & Tham gia room. Nếu \texttt{callActive} là true, thêm vào danh sách chờ duyệt \\ \hline
+handleRequestJoin & requestJoin & Gửi yêu cầu xin Join phòng đến host khi cuộc gọi đang diễn ra \\ \hline
+handleApproveJoin & approveJoin & Host duyệt yêu cầu, người xin được join phòng \\ \hline
+handleRejectJoin & rejectJoin & Host từ chối yêu cầu, người xin bị báo lỗi \\ \hline
+handleLeaveRoom & leaveRoom & Rời room, cập nhật danh sách members, xóa room nếu trống \\ \hline
+handleStartCall & startCall & Đánh dấu callActive = true và broadcast thông báo \\ \hline
+handleOffer & offer & Chuyển tiếp SDP Offer từ sender đến target peer \\ \hline
+handleAnswer & answer & Chuyển tiếp SDP Answer từ sender đến target peer \\ \hline
+handleCandidate & candidate & Chuyển tiếp ICE Candidate từ sender đến target peer \\ \hline
+handleEndCall & endCall & Đánh dấu callActive = false và broadcast thông báo kết thúc \\ \hline
+handleLogConnectionType & logConnectionType & Nhận thông tin loại kết nối (host/relay/srflx) từ Client và in log \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{REST API Endpoints}
+\begin{table}[H]
+\centering
+\caption{REST API của Signaling Server}
+\begin{tabular}{|l|l|p{7cm}|}
+\hline
+\textbf{Endpoint} & \textbf{Method} & \textbf{Chức năng} \\ \hline
+/health & GET & Health check – trả về uptime, số room và số client đang kết nối \\ \hline
+/api/rooms & GET & Lấy danh sách tất cả rooms đang hoạt động \\ \hline
+/api/rooms/:roomId & GET & Lấy thông tin chi tiết của một room cụ thể \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Signaling Protocol (Giao thức tín hiệu)}
+Client $\rightarrow$ Server:
+\begin{itemize}
+    \item \texttt{register} $\rightarrow$ \texttt{\{ type: 'register', name \}}
+    \item \texttt{createRoom} $\rightarrow$ \texttt{\{ type: 'createRoom', roomId, name \}}
+    \item \texttt{joinRoom} $\rightarrow$ \texttt{\{ type: 'joinRoom', roomId, name \}}
+    \item \texttt{requestJoin} $\rightarrow$ \texttt{\{ type: 'requestJoin', roomId, name \}}
+    \item \texttt{approveJoin} $\rightarrow$ \texttt{\{ type: 'approveJoin', roomId, requesterId \}}
+    \item \texttt{rejectJoin} $\rightarrow$ \texttt{\{ type: 'rejectJoin', roomId, requesterId \}}
+    \item \texttt{leaveRoom} $\rightarrow$ \texttt{\{ type: 'leaveRoom', roomId, sender \}}
+    \item \texttt{startCall} $\rightarrow$ \texttt{\{ type: 'startCall', roomId, sender \}}
+    \item \texttt{offer} $\rightarrow$ \texttt{\{ type: 'offer', roomId, sender, target, offer \}}
+    \item \texttt{answer} $\rightarrow$ \texttt{\{ type: 'answer', roomId, sender, target, answer \}}
+    \item \texttt{candidate} $\rightarrow$ \texttt{\{ type: 'candidate', roomId, sender, target, candidate \}}
+    \item \texttt{requestJoin} $\rightarrow$ \texttt{\{ type: 'requestJoin', roomId, name \}}
+    \item \texttt{approveJoin} $\rightarrow$ \texttt{\{ type: 'approveJoin', roomId, requesterId \}}
+    \item \texttt{rejectJoin} $\rightarrow$ \texttt{\{ type: 'rejectJoin', roomId, requesterId \}}
+    \item \texttt{logConnectionType} $\rightarrow$ \texttt{\{ type: 'logConnectionType', roomId, target, candidateType \}}
+    \item \texttt{endCall} $\rightarrow$ \texttt{\{ type: 'endCall', roomId, sender \}}
+\end{itemize}
+  
+Server $\rightarrow$ Client:
+\begin{itemize}
+    \item \texttt{connected} $\rightarrow$ \texttt{\{ type: 'connected', clientId \}}
+    \item \texttt{registered} $\rightarrow$ \texttt{\{ type: 'registered', name, clientId \}}
+    \item \texttt{roomCreated} $\rightarrow$ \texttt{\{ type: 'roomCreated', roomId, isHost, members \}}
+    \item \texttt{roomJoined} $\rightarrow$ \texttt{\{ type: 'roomJoined', roomId, isHost, members, callActive \}}
+    \item \texttt{waitingForApproval} $\rightarrow$ \texttt{\{ type: 'waitingForApproval', roomId \}}
+    \item \texttt{joinRequestReceived} $\rightarrow$ \texttt{\{ type: 'joinRequestReceived', requesterId, name \}}
+    \item \texttt{joinApproved} $\rightarrow$ \texttt{\{ type: 'joinApproved', roomId, isHost, members, callActive \}}
+    \item \texttt{joinRejected} $\rightarrow$ \texttt{\{ type: 'joinRejected', roomId, reason \}}
+    \item \texttt{roomMembers} $\rightarrow$ \texttt{\{ type: 'roomMembers', roomId, members \}}
+    \item \texttt{memberJoined} $\rightarrow$ \texttt{\{ type: 'memberJoined', roomId, member \}}
+    \item \texttt{memberLeft} $\rightarrow$ \texttt{\{ type: 'memberLeft', roomId, name, memberId \}}
+    \item \texttt{leftRoom} $\rightarrow$ \texttt{\{ type: 'leftRoom', roomId \}}
+    \item \texttt{callStarted} $\rightarrow$ \texttt{\{ type: 'callStarted', roomId, initiator, initiatorName \}}
+    \item \texttt{callEnded} $\rightarrow$ \texttt{\{ type: 'callEnded', roomId, endedBy, endedByName \}}
+    \item \texttt{serverLog} $\rightarrow$ \texttt{\{ type: 'serverLog', level, message, timestamp \}}
+    \item \texttt{offer/answer/candidate} $\rightarrow$ chuyển tiếp nguyên vẹn tới target
+    \item \texttt{error} $\rightarrow$ \texttt{\{ type: 'error', message \}}
+\end{itemize}
+
+\section{Kiến trúc Frontend — React Application}
+\subsection{Cấu trúc thư mục}
+\begin{itemize}
+    \item \texttt{frontend/src/}
+    \begin{itemize}
+        \item \texttt{App.jsx}: Component gốc, routing quy trình chính
+        \item \texttt{main.jsx}: Entry point
+        \item \texttt{index.css}: Tailwind CSS imports
+        \item \texttt{components/}: UI components (DebugPanel, ControlBar...)
+        \item \texttt{context/}: React Context (state management tập trung)
+        \item \texttt{data/}: Constants, dữ liệu mẫu, utilities
+        \item \texttt{services/}: Các logic chuyên biệt WebRTC, Signaling, Config APIs
+    \end{itemize}
+\end{itemize}
+
+\subsection{App States (Trạng thái ứng dụng)}
+Ứng dụng sử dụng state-machine routing thay vì dùng thư viện Router truyền thống:
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{img/web1.png}
+    \caption{Sơ đồ trạng thái}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Các trạng thái của ứng dụng}
+\begin{tabular}{|l|l|p{7cm}|}
+\hline
+\textbf{State} & \textbf{Màn hình} & \textbf{Mô tả} \\ \hline
+IDLE & JoinRoomScreen & Người dùng nhập nickname và tạo/tham gia phòng \\ \hline
+WAITING\_APPROVAL & WaitingApprovalScreen & Khi call đã bắt đầu, user phải đợi host duyệt \\ \hline
+IN\_ROOM & RoomLobbyScreen & Phòng chờ, hiển thị danh sách members khi call chưa bắt đầu \\ \hline
+CALLING & VideoCallScreen & Đang trong cuộc gọi video \\ \hline
+ENDED & CallEndedScreen & Tóm tắt kết thúc, hiển thị 2s trước khi về IDLE \\ \hline
+\end{tabular}
+\end{table}
+
+\section{Services (Lõi Logic)}
+\subsection{\texttt{services/config.js} — Cấu Hình ICE/TURN}
+File này tập trung cấu hình, ưu tiên đọc từ biến môi trường Vite (\texttt{VITE\_*}). Khai báo các thiết lập cốt lõi cho WebRTC bao gồm \texttt{METERED\_TURN\_URL} để tự động fetch danh sách STUN/TURN servers chất lượng cao.
+\begin{table}[H]
+\centering
+\caption{Cấu hình hệ thống trong config.js}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\textbf{Config} & \textbf{Mặc định} & \textbf{Mô tả} \\ \hline
+SIGNALING\_URL & \texttt{VITE\_SIGNALING\_URL} (Ưu tiên biến môi trường) & URL của signaling server P2P \\ \hline
+P2P\_TIMEOUT\_MS & 10000 & Thời gian timeout trước khi fallback sang TURN. Gây ra cảnh báo "P2P failed" cho user. \\ \hline
+iceServers & Google STUN & Danh sách STUN (và TURN fetch tự động từ REST API Metered) \\ \hline
+STATS\_INTERVAL\_MS & 2000 & Chu kỳ thu thập thống kê WebRTC \\ \hline
+MAX\_RECONNECT\_ATTEMPTS & 5 & Số lần thử reconnect tối đa khi mất kết nối \\ \hline
+RECONNECT\_DELAY\_MS & 2000 & Thời gian delay giữa các lần reconnect \\ \hline
+\end{tabularx}
+\end{table}
+
+\subsection{\texttt{services/signaling.js} — SignalingService}
+Quản lý kết nối WebSocket đến signaling server, tự động reconnect và queue bản tin thông minh.
+\begin{itemize}
+    \item connect(): Kết nối WebSocket, trả về Promise resolve khi nhận \textbf{connected} message
+    \item disconnect(): Đóng kết nối WebSocket (code 1000)
+    \item send(message): Gửi message JSON, nếu chưa connect thì queue vào pending
+    \item flushPendingMessages(): Gửi tất cả messages đang đợi khi kết nối lại
+    \item attemptReconnect(): Tự động reconnect với delay tăng dần (delay × attempt)
+    \item on(type, handler): Đăng ký handler cho message type cụ thể
+    \item off(type, handler): Hủy đăng ký handler
+    \item handleMessage(message): Phân phối message đến các handlers đã đăng ký
+    \item register(name): Gửi message đăng ký tên
+    \item createRoom(roomId, name): Gửi message tạo phòng
+    \item joinRoom(roomId, name): Gửi message tham gia phòng
+    \item requestJoin(roomId, name): Gửi message yêu cầu tham gia phòng đang trong cuộc gọi
+    \item approveJoin(roomId, requesterId): (Host) Chấp nhận yêu cầu tham gia
+    \item rejectJoin(roomId, requesterId): (Host) Từ chối yêu cầu tham gia
+    \item leaveRoom(roomId): Gửi message rời phòng
+    \item startCall(roomId): Gửi message bắt đầu cuộc gọi
+    \item sendOffer(roomId, target, offer): Gửi SDP Offer đến target peer
+    \item sendAnswer(roomId, target, answer): Gửi SDP Answer đến target peer
+    \item sendCandidate(roomId, target, candidate): Gửi ICE Candidate đến target peer
+    \item logConnectionType(roomId, target, candidateType): Gửi thông tin candidate type về server
+    \item endCall(roomId): Gửi message kết thúc cuộc gọi 
+    \item getClientId(): Lấy client ID được server cấp 
+    \item isReady(): Kiểm tra WebSocket đã sẵn sàng chưa
+\end{itemize}
+
+\subsection{ `services/webrtc.js` — WebRTCService}
+Quản lý tất cả peer connections WebRTC. Singleton pattern.
+\begin{itemize}
+    \item Media:
+        \begin{itemize}
+            \item getLocalStream(constraints): Lấy camera/mic stream từ trình duyệt (`getUserMedia`)
+            \item stopLocalStream(): Dừng tất cả tracks của local stream 
+            \item toggleAudio(enabled): Bật/tắt audio track
+            \item toggleVideo(enabled): Bật/tắt video track
+        \end{itemize}
+    \item Peer Connections:
+        \begin{itemize}
+            \item createPeerConnection(peerId, peerName): Tạo `RTCPeerConnection` mới, add local tracks, thiết lập event handlers (`ontrack`, `onconnectionstatechange`, `oniceconnectionstatechange`) 
+            \item createOffer(peerId): Tạo SDP Offer và set LocalDescription
+            \item handleOffer(peerId, peerName, offer): Nhận SDP Offer, tạo peer connection nếu chưa có, set RemoteDescription
+            \item createAnswer(peerId): Tạo SDP Answer và set LocalDescription 
+            \item handleAnswer(peerId, answer): Nhận SDP Answer, set RemoteDescription
+            \item handleCandidate(peerId, candidate): Thêm ICE Candidate nhận được vào peer connection
+            \item onIceCandidate(peerId, callback): Đăng ký callback khi có ICE Candidate mới 
+            \item closePeerConnection(peerId): Đóng 1 peer connection cụ thể
+            \item closeAllConnections(): Đóng tất cả peer connections
+        \end{itemize}
+    \item TURN Fallback:
+        \begin{itemize}
+            \item startP2PTimeout(peerId, peerName): Bắt đầu timer, nếu sau `P2P\_TIMEOUT\_MS` vẫn chưa connected → cảnh báo cần TURN
+            \item clearP2PTimeout(peerId): Hủy timer khi đã connected thành công
+            \item checkCandidateType(peerId, peerName, pc): Kiểm tra loại ICE candidate đang dùng (host/srflx/relay)
+        \end{itemize}
+    \item Thống kê:
+        \begin{itemize}
+            \item startStatsCollection(interval): Bắt đầu thu thập stats định kỳ từ tất cả connections
+            \item stopStatsCollection(): Dừng thu thập stats
+            \item getDetailedStats(pc): Lấy stats chi tiết: bytes, packets, jitter, RTT, resolution, codec, candidate type 
+            \item getCallDuration(): Tính thời lượng cuộc gọi
+            \item getAllStats(): Lấy stats tổng hợp tất cả connections
+            \item getConnectionCount(): Số lượng peer connections hiện tại
+            \item areAllConnectionsStable(): Kiểm tra tất cả connections đã ổn định chưa
+        \end{itemize}
+\end{itemize}
+
+\subsection{Callbacks của WebRTCService}
+\begin{table}[H]
+\centering
+\caption{Callbacks của WebRTCService}
+
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\textbf{Callback} & \textbf{Khi nào được gọi} \\ \hline
+onRemoteStream(peerId, peerName, stream) & Khi nhận được media stream từ peer \\ \hline
+onRemoteStreamRemoved(peerId, peerName) & Khi remote stream bị mất \\ \hline
+onConnectionStateChange(peerId, peerName, state) & Khi trạng thái connection thay đổi \\ \hline
+onIceStateChange(peerId, peerName, state) & Khi trạng thái ICE thay đổi \\ \hline
+onStatsUpdate(peerId, stats) & Khi stats được cập nhật \\ \hline
+onTurnFallback(peerId, peerName) & Khi P2P timeout và có thể cần TURN relay \\ \hline
+\end{tabularx}
+
+\end{table}
+
+\section{Components (Giao Diện)}
+
+\subsection{`JoinRoomScreen` — Màn hình chính (Landing page)}
+- Thêm ảnh vào đây nha 
+\begin{itemize}
+    \item Nhập \textbf{nickname} (tối thiểu 2 ký tự)
+    \item Tạo phòng mới: Chỉ cần nickname → tạo room với ID ngẫu nhiên
+    \item Tham gia phòng: Nhập nickname + Room ID → join room có sẵn
+    \item Browse Active Rooms: Mở RoomListScreen
+    \item Validate input, hiển thị lỗi inline
+\end{itemize}
+
+\subsection{`RoomListScreen` — Danh sách phòng}
+- Thêm ảnh vào đây nha 
+\begin{itemize}
+    \item Gọi REST API `GET /api/rooms` để lấy danh sách phòng đang hoạt động
+    \item Auto-refresh mỗi 5 giây (có thể bật/tắt)
+    \item Tìm kiếm phòng theo Room ID
+    \item Hiển thị: Room ID, số members, trạng thái call, thời gian tạo
+    \item Click để tham gia phòng
+\end{itemize}
+
+\subsection{`RoomLobbyScreen` — Phòng chờ}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item Hiển thị Room ID với nút \textbf{Copy} (clipboard API)
+    \item Danh sách members online (hiện tên, badge Host/You)
+    \item Nút \textbf{Start Group Call} (yêu cầu ≥ 2 members)
+    \item Nút \textbf{Leave Room} để rời phòng
+    \item Hiển thị trạng thái "Waiting for participants" khi chỉ có 1 người
+\end{itemize}
+
+\subsection{`VideoCallScreen` — Màn hình cuộc gọi}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item Layout chính: Header (Room ID, ConnectionStatus, timer) + VideoGrid + ControlBar
+    \item Tích hợp StatsPanel và SettingsPanel (slide-in panels)
+    \item Backdrop overlay khi panel mở
+    \item Hiển thị Toast notifications
+\end{itemize}
+
+\subsection{`VideoGrid` — Lưới video}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item Responsive grid layout tùy theo số participants:
+        \begin{itemize}
+            \item 1 người: 1 cột (full width)
+            \item 2 người: 2 cột
+            \item 3-4 người: 2 cột
+            \item 5-6 người: 3 cột
+            \item 7+ người: 3-4 cột
+        \end{itemize}
+    \item Render `VideoTile` cho mỗi participant    
+\end{itemize}
+
+\subsection{`VideoTile` — Ô video từng người}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item Gắn `MediaStream` vào `<video>` element qua `useEffect`
+    \item Local video: mirror ngang (`scale-x-[-1]`), mute (chống echo)
+    \item Camera off: hiển thị avatar/icon thay thế
+    \item Hiển thị tên, trạng thái mic/camera, connection status dot
+    \item Spinner overlay khi đang connecting
+    \item Host có thể xóa remote participant
+\end{itemize}
+
+\subsection{`ControlBar` — Thanh điều khiển}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item \textbf{Mic toggle}: Bật/tắt micro (đỏ khi tắt)
+    \item \textbf{Camera toggle}: Bật/tắt camera (đỏ khi tắt)
+    \item \textbf{End call}: Kết thúc cuộc gọi (đỏ)
+    \item \textbf{Stats}: Mở/đóng bảng thống kê
+    \item  \textbf{Settings}: Mở/đóng bảng cài đặt
+    \item Hiển thị số participants
+\end{itemize}
+
+\subsection{`ConnectionStatus` — Badge trạng thái}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item - Hiển thị dot màu + text tương ứng trạng thái: Connected (xanh) |  Connecting (vàng) | Failed/Disconnected (đỏ) | New (trắng)
+    \item Pulse animation khi đang connecting
+    \item Hiển thị ICE state (tùy chọn)
+    \item Hiển thị badge TURN khi sử dụng relay
+\end{itemize}
+
+\subsection{`StatsPanel` — Bảng thống kê cuộc gọi}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item Slide-in panel bên phải
+    \item Hiển thị real-time:
+        \begin{itemize}
+            \item Thời gian bắt đầu, thời lượng
+            \item Connection state, ICE state
+            \item Candidate type (host/srflx/relay)
+            \item Local/Remote candidate info (IP, port, protocol)
+            \item Bytes/Packets sent/received
+            \item Packet loss, Jitter, Round-trip time
+            \item Available bitrate (outgoing/incoming)
+            \item Video resolution, frame rate
+            \item Audio/Video codec
+        \end{itemize}
+\end{itemize}
+
+\subsection{`SettingsPanel` — Bảng cài đặt ICE/TURN}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item Cấu hình STUN URL, TURN URLs (UDP/TCP/TLS)
+    \item Cấu hình TURN credentials (username/password)
+    \item ICE Transport Policy (all/relay)
+    \item \textbf{Test Connection}: Tạo RTCPeerConnection tạm, gather ICE candidates, báo cáo loại candidates tìm được (host/srflx/relay)
+\end{itemize}
+
+\subsection{`CallEndedScreen` — Màn hình kết thúc}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item Hiển thị tóm tắt cuộc gọi (mock data)
+    \item Nút quay lại trang chủ
+\end{itemize}
+
+\subsection{`DebugPanel` — Panel debug}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item Ẩn mặc định, bật bằng \textbf{Ctrl+Shift+D}
+    \item Hiển thị cấu hình hiện tại: Signaling URL, ICE servers, P2P timeout
+    \item Log config ra console
+\end{itemize}
+
+\subsection{`Toast` — Thông báo}
+- Thêm ảnh vào đây nha
+\begin{itemize}
+    \item Floating notification ở góc trên phải
+    \item  4 loại: info (xanh), success (xanh lá), warning (vàng), error (đỏ)
+    \item  Animation slide-up, auto-dismiss
+\end{itemize}
+
+\section{Context (Quản Lý State)}
+\subsection{`context/AppContext.jsx`- Quản lý state}
+Đây là \textbf{trung tâm quản lý state} của toàn bộ ứng dụng, sử dụng React Context + Hooks.
+
+\subsubsection{State được quản lý}
+\begin{table}[H]
+\centering
+\caption{State được quản lý trong AppContext}
+\begin{tabular}{|l|l|p{7cm}|}
+\hline
+\textbf{State} & \textbf{Kiểu} & \textbf{Mô tả} \\ \hline
+appState & string & Trạng thái ứng dụng (IDLE, WAITING\_APPROVAL, IN\_ROOM, CALLING, ENDED) \\ \hline
+currentUser & object & Thông tin user hiện tại \\ \hline
+isHost & boolean & User có phải host hay không \\ \hline
+roomId & string & ID phòng hiện tại \\ \hline
+roomMembers & array & Danh sách members trong phòng \\ \hline
+participants & array & Danh sách participants trong cuộc gọi \\ \hline
+joinRequests & array & (Chỉ Host) Danh sách các yêu cầu tham gia phòng \\ \hline
+serverLogs & array & Lịch sử log từ server trả về \\ \hline
+localStream & MediaStream & Stream camera/mic local \\ \hline
+connectionState & string & Trạng thái connection tổng hợp \\ \hline
+iceState & string & Trạng thái ICE \\ \hline
+callStats & object & Thống kê cuộc gọi \\ \hline
+callDuration & string & Thời lượng cuộc gọi \\ \hline
+signalingConnected & boolean & Trạng thái kết nối signaling \\ \hline
+notification & object & Thông báo hiển thị \\ \hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Actions (Hàm hành động)}
+\begin{table}[H]
+\centering
+\caption{Các hàm hành động trong AppContext}
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Hàm} & \textbf{Chức năng} \\ \hline
+createRoom(nickname) & Đăng ký tên và tạo room mới \\ \hline
+joinRoom(nickname, roomId) & Đăng ký tên và tham gia room \\ \hline
+leaveRoom() & Rời room và reset state \\ \hline
+startGroupCall() & Lấy local stream và tạo peer connections \\ \hline
+endCall() & Kết thúc cuộc gọi và cleanup resources \\ \hline
+toggleMic() & Bật/tắt micro \\ \hline
+toggleCamera() & Bật/tắt camera \\ \hline
+getAggregatedStats() & Tổng hợp stats từ tất cả peer connections \\ \hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Signaling Event Handlers (trong useEffect)}
+\begin{table}[H]
+\centering
+\caption{Các sự kiện signaling và cách xử lý}
+\begin{tabular}{|l|p{9cm}|}
+\hline
+\textbf{Event} & \textbf{Xử lý} \\ \hline
+connected & Cập nhật clientId \\ \hline
+roomCreated & Chuyển sang trạng thái IN\_ROOM \\ \hline
+roomJoined & Cập nhật roomId và members \\ \hline
+roomMembers & Cập nhật danh sách members \\ \hline
+memberJoined & Hiển thị notification \\ \hline
+memberLeft & Đóng peer connection và cập nhật participants \\ \hline
+offer & Xử lý SDP Offer và gửi Answer \\ \hline
+answer & Cập nhật RemoteDescription \\ \hline
+candidate & Thêm ICE candidate vào peer connection \\ \hline
+callEnded & Cleanup cuộc gọi \\ \hline
+error & Hiển thị lỗi \\ \hline
+\end{tabular}
+\end{table}
+
+\section{Luồng Hoạt Động (Flow)}
+\subsection{Flow 1: Tạo phòng và bắt đầu cuộc gọi}
+
+\begin{enumerate}
+
+\item \textbf{User A tạo phòng}
+
+User A nhập nickname và nhấn nút \textbf{Create Room}. Các bước diễn ra như sau:
+
+\begin{itemize}
+\item Client gửi message \texttt{register(name)} tới signaling server để đăng ký nickname.
+\item Server lưu tên người dùng trong danh sách client đang kết nối.
+\item Client gửi \texttt{createRoom(roomId, name)} để tạo phòng mới.
+\item Server tạo room và thêm User A vào danh sách thành viên.
+\item Server gửi message \texttt{roomCreated}.
+\item UI chuyển sang màn hình \texttt{RoomLobbyScreen}.
+\end{itemize}
+
+\item \textbf{User B tham gia phòng}
+
+User B nhập nickname và Room ID, sau đó nhấn \textbf{Join Room}.
+
+\begin{itemize}
+\item Client gửi \texttt{register(name)} tới server.
+\item Client gửi \texttt{joinRoom(roomId, name)} để tham gia phòng.
+\item Server thêm User B vào danh sách thành viên của room.
+\item Server gửi \texttt{roomJoined} cho User B.
+\item Server gửi \texttt{memberJoined} cho User A để cập nhật danh sách thành viên.
+\item Cả hai client hiển thị giao diện \texttt{RoomLobbyScreen}.
+\end{itemize}MAX_RECONNECT_ATTEMPTS
+
+\item \textbf{User A bắt đầu cuộc gọi nhóm}
+
+\begin{itemize}
+\item Client gọi hàm \texttt{getLocalStream()} để lấy camera và microphone.
+\item Client gửi message \texttt{startCall(roomId)} tới signaling server.
+\item Server broadcast message \texttt{callStarted} tới tất cả thành viên trong room.
+\end{itemize}
+
+Sau đó User A tạo kết nối WebRTC với từng peer trong phòng.
+
+\begin{itemize}
+\item Với mỗi thành viên khác (ví dụ User B):
+\begin{itemize}
+\item Gọi \texttt{createPeerConnection(B.id, B.name)} để tạo đối tượng \texttt{RTCPeerConnection}.
+\item Gọi \texttt{createOffer()} để tạo SDP Offer.
+\item Gửi \texttt{sendOffer(roomId, B.id, offer)} thông qua signaling server.
+\end{itemize}
+\end{itemize}
+
+\item \textbf{User B nhận offer}
+
+\begin{itemize}
+\item Nếu chưa có media stream, User B gọi \texttt{getLocalStream()}.
+\item Gọi \texttt{handleOffer(A.id, offer)} để thiết lập \texttt{RemoteDescription}.
+\item Gọi \texttt{createAnswer()} để tạo SDP Answer.
+\item Gửi \texttt{sendAnswer(roomId, A.id, answer)} qua signaling server.
+\end{itemize}
+
+\item \textbf{Trao đổi ICE Candidate}
+
+\begin{itemize}
+\item ICE candidates được gửi qua signaling server bằng message \texttt{candidate}.
+\item Client nhận candidate và gọi \texttt{addIceCandidate()}.
+\end{itemize}
+
+\item \textbf{Thiết lập kết nối P2P}
+
+\begin{itemize}
+\item Khi ICE state chuyển sang \texttt{connected}, kết nối WebRTC được thiết lập.
+\item Sự kiện \texttt{ontrack} được kích hoạt.
+\item Media stream từ peer được hiển thị trên giao diện video.
+\end{itemize}
+
+\end{enumerate}
+
+
+\subsection{Flow 2: WebRTC Connection Establishment}
+
+Quá trình thiết lập kết nối WebRTC giữa hai peer diễn ra qua các bước sau:
+
+\begin{enumerate}
+
+\item \textbf{Tạo Peer Connection}
+
+Client gọi hàm \texttt{createPeerConnection()}.
+
+\begin{itemize}
+\item Tạo đối tượng:
+
+\texttt{new RTCPeerConnection(\{ iceServers \})}
+
+\item Các local tracks (audio/video) được thêm vào bằng:
+
+\texttt{addTrack()}
+\end{itemize}
+
+\item \textbf{Trao đổi SDP}
+
+\begin{itemize}
+\item Peer khởi tạo gọi \texttt{createOffer()}.
+\item Peer nhận gọi \texttt{createAnswer()}.
+\item SDP được gửi qua signaling server.
+\item Hai phía gọi:
+\begin{itemize}
+\item \texttt{setLocalDescription()}
+\item \texttt{setRemoteDescription()}
+\end{itemize}
+\end{itemize}
+
+\item \textbf{ICE Candidate Gathering}
+
+\begin{itemize}
+\item Sự kiện \texttt{onicecandidate} được kích hoạt khi có candidate mới.
+\item Candidate được gửi tới peer thông qua signaling server.
+\item Peer nhận candidate gọi \texttt{addIceCandidate()}.
+\end{itemize}
+
+\item \textbf{Trạng thái kết nối}
+
+Các trạng thái ICE có thể xảy ra:
+
+\begin{itemize}
+\item \texttt{new} $\rightarrow$ \texttt{checking} $\rightarrow$ \texttt{connected}
+\item \texttt{new} $\rightarrow$ \texttt{checking} $\rightarrow$ \texttt{failed}
+\end{itemize}
+
+\item \textbf{Fallback sang TURN}
+
+Nếu kết nối P2P không thành công:
+
+\begin{itemize}
+\item Hàm \texttt{startP2PTimeout()} kích hoạt cảnh báo sau khoảng 10 giây.
+\item ICE sẽ thử candidate loại \texttt{relay}.
+\item Media stream sẽ được chuyển tiếp qua TURN server.
+\item Hàm \texttt{checkCandidateType()} được dùng để xác định loại kết nối đang sử dụng.
+\end{itemize}
+
+\end{enumerate}
+
+\section{TURN Server (Dịch Vụ Cloud API)}
+Vì giao thức WebRTC yêu cầu truyền thông tin hình ảnh qua hàng ngàn UDP Ports mở liên tục, việc tự host TURN bằng Docker trên các nền tảng Web Service miễn phí (như Render) là không khả thi do bị giới hạn Port. 
+
+Để giải quyết vấn đề NAT Traversal cho Release, hệ thống sử dụng Dịch vụ TURN Cloud (Metered TURN API):
+
+\begin{itemize}
+    \item \textbf{Metered TURN API}: Cung cấp các Endpoint GET để thiết bị Client liên tục Fetch ra danh sách IP TURN relay tối ưu nhất dựa theo vị trí địa lý.
+    \item \textbf{Tích hợp môi trường}: Đưa API Key nhận được vào biến \texttt{VITE\_METERED\_TURN\_URL}.
+    \item \textbf{Tự động hóa}: File \texttt{config.js} trên trình duyệt sẽ gọi fetch() lấy mảng mảng ICE Servers và nạp thẳng vào thông số cấu hình của peer connection trước khi gọi.
+\end{itemize}
+
+\section{STUN, TURN và ICE Candidate Types}
+
+Trong WebRTC, việc thiết lập kết nối giữa hai peer được thực hiện thông qua cơ chế \textbf{ICE (Interactive Connectivity Establishment)}. ICE cho phép trình duyệt thử nhiều đường kết nối khác nhau để tìm ra đường truyền tốt nhất giữa hai peer.
+
+Trong quá trình ICE gathering, trình duyệt sẽ thu thập nhiều loại \textbf{ICE Candidate}. Mỗi candidate đại diện cho một địa chỉ mạng có thể dùng để thiết lập kết nối.
+
+\subsection{Các loại ICE Candidate}
+
+\begin{table}[H]
+\centering
+\caption{Các loại ICE Candidate trong WebRTC}
+\begin{tabular}{|l|l|p{8cm}|}
+\hline
+\textbf{Candidate Type} & \textbf{Nguồn} & \textbf{Ý nghĩa} \\ \hline
+host & Local network & Địa chỉ IP nội bộ của thiết bị (LAN). Dùng khi hai peer ở cùng mạng. \\ \hline
+srflx & STUN server & Server reflexive candidate. Địa chỉ public IP của client được phát hiện thông qua STUN server. \\ \hline
+relay & TURN server & Media được chuyển tiếp qua TURN server khi kết nối P2P không khả thi. \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Vai trò của STUN}
+
+STUN (\textbf{Session Traversal Utilities for NAT}) giúp client xác định địa chỉ IP public của mình khi ở sau NAT.
+
+Quy trình hoạt động:
+
+\begin{enumerate}
+\item Client gửi request tới STUN server.
+\item STUN server phản hồi với địa chỉ IP public và port mapping.
+\item Thông tin này được dùng để tạo \texttt{srflx candidate}.
+\end{enumerate}
+
+Nhờ đó hai peer ở các mạng khác nhau vẫn có thể thiết lập kết nối trực tiếp.
+
+\subsection{Vai trò của TURN}
+
+Trong một số trường hợp NAT hoặc firewall quá chặt (ví dụ symmetric NAT hoặc mạng 4G/5G), kết nối P2P trực tiếp có thể thất bại.
+
+Khi đó WebRTC sẽ sử dụng \textbf{TURN server} để relay media giữa hai peer.
+
+Flow của TURN:
+
+\begin{center}
+Peer A $\rightarrow$ TURN Server $\rightarrow$ Peer B
+\end{center}
+
+Candidate được sử dụng trong trường hợp này là \texttt{relay}.
+
+\subsection{Cấu hình ICE Servers}
+
+Thông qua cấu hình tự động (\texttt{VITE\_METERED\_TURN\_URL}), ứng dụng sẽ nạp vào danh sách các máy chủ phân giải IP:
+
+\begin{itemize}
+\item \textbf{STUN server (Miễn phí từ Google):}
+
+\texttt{stun:stun.l.google.com:19302}
+
+\item \textbf{TURN server (cấp phát bởi Metered Cloud):}
+
+\texttt{turn:<IP>?transport=udp}
+
+\texttt{turn:<IP>?transport=tcp}
+
+\texttt{turns:<IP>?transport=tcp} (Có mã hóa TLS)
+\end{itemize}
+
+Trình duyệt sẽ tự động thử các candidate theo thứ tự ưu tiên để tìm ra đường kết nối tốt nhất.
+
+\subsection{Kết quả kiểm tra Candidate Type}
+
+Trong quá trình thử nghiệm hệ thống, ba trường hợp kết nối phổ biến được quan sát:
+
+\begin{table}[H]
+\centering
+\caption{Kết quả thử nghiệm ICE Candidate}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Môi trường test} & \textbf{Candidate Type} & \textbf{Mô tả} \\ \hline
+Hai thiết bị cùng WiFi & host & Kết nối trực tiếp trong mạng LAN \\ \hline
+Hai thiết bị khác mạng (WiFi + 4G) & srflx & Sử dụng STUN để phát hiện public IP \\ \hline
+NAT/Firewall chặt & relay & Media truyền qua TURN server \\ \hline
+\end{tabular}
+\end{table}
+
+Ứng dụng hiển thị thông tin này trong \textbf{Stats Panel}, bao gồm:
+
+\begin{itemize}
+\item Candidate type (host / srflx / relay)
+\item Local candidate
+\item Remote candidate
+\item Protocol (UDP/TCP)
+\end{itemize}
+
+\section{Hạn chế \& Hướng phát triển}
+\subsection{Hạn chế hiện tại}
+\begin{itemize}
+    \item \textbf{Kiến trúc Mesh Topology:} Phù hợp và hoạt động tốt với nhóm nhỏ (2-6 người). Tuy nhiên, khi số lượng người tham gia tăng lên (ví dụ: 10-20 người), CPU và Bandwidth của mỗi client sẽ bị quá tải do phải duy trì đồng thời $(N-1)$ kết nối WebRTC (gửi và nhận ngần ấy luồng video/audio streaming). Điểm hạn chế này đã được xác định rõ khi test với $N \ge 6$.
+    \item \textbf{Khối lượng Signaling:} Việc thiết lập Mesh Topology yêu cầu mỗi client gửi và nhận một lượng lớn bản tin SDP (Offer/Answer) và các gói ICE Candidates, dẫn tới độ trễ ngắn cho những người vào sau, và cần tối ưu khả năng queue messages khi mạng kém.
+    \item \textbf{Xử lý nhiễu âm thanh:} Dù đã có `mute` local video để chống echo, khả năng lọc tiếng ồn, khử tiếng vang (Acoustic Echo Cancellation - AEC) nâng cao vẫn phụ thuộc hoàn toàn vào browser và phần cứng của người dùng, chưa có Media Server can thiệp.
+    \item \textbf{Chức năng chat}: Hiện tại app mới chỉ có chức năng gọi video call với nhóm. Nếu so sánh với các app như Google Meet hay Zoom thì vẫn còn thiếu chức năng chat để người dùng tiện trao đổi khi không thể bật mic.
+    \item \textbf{Screen Sharing}: Hiện tại app chưa có chức năng chia sẻ màn hình.
+    \item \textbf{Share link}: App chưa có chức năng share link để người ngoài vào trực tiếp phòng
+\end{itemize}
+
+\subsection{Hướng phát triển tương lai}
+\begin{itemize}
+    \item \textbf{Chuyển đổi sang kiến trúc SFU (Selective Forwarding Unit):} 
+        Thay thế mô hình Mesh bằng SFU (như mediasoup, thưa Janus, hoặc mediasoup). Mỗi client chỉ cần tạo 1 kết nối gửi luồng Media lên Server, và Server sẽ chịu trách nhiệm phân phát luồng này tới các client khác. Phù hợp cho phòng họp lớn (50-100 người) vì băng thông tải lên của người dùng được tiết kiệm tối đa.
+    \item \textbf{Triển khai MCU (Multipoint Control Unit):} 
+        Dành cho băng thông tải xuống yếu: Server sẽ thu thập, mix (trộn) tất cả luồng Audio/Video của mọi người lại thành 1 luồng duy nhất rồi nén gửi lại (ví dụ độ phân giải tự động giảm). Tốn chi phí tính toán CPU trên Server nhưng cực nhẹ cho Client.
+    \item \textbf{Bổ sung Screen Sharing \& Chat Text:} Sử dụng \texttt{getDisplayMedia()} để tích hợp tính năng trình chiếu màn hình và \texttt{RTCDataChannel} để tối ưu hóa việc truyền nhận Text Chat nội bộ P2P độ trễ cực thấp.
+    \item \textbf{Dynamic Video Tiles:} Nâng cấp trải nghiệm UI bằng cách tự động ẩn cam của người không nói chuyện (Active Speaker Detection), tự động ưu tiên băng thông, hoặc phân mảnh luồng video (Simulcast/SVC) tùy vào tốc độ mạng mỗi Peer.
+    \item \textbf{Thêm chức năng Share link} Sử dụng \texttt{generateRandomString()} để tạo mã phòng ngẫu nhiên và \texttt{window.location.href} để chia sẻ link phòng.
+    \item \textbf{Thêm chức năng Screen Sharing} Sử dụng \texttt{getDisplayMedia()} để tích hợp tính năng trình chiếu màn hình.
+    \item \textbf{Thêm chức năng Chat Text} Sử dụng \texttt{RTCDataChannel} để tích hợp tính năng chat nội bộ P2P độ trễ cực thấp.
+\end{itemize}
+\section{Kết quả chạy thử nghiệm}
+\textbf{Test Local (cùng LAN):}
+Hai máy cùng WiFi cấu hình Mesh liên lạc cực nhanh, StatsPanel báo \texttt{Local Candidate: host}, RTT $\sim$ \texttt{5ms}, Jitter \texttt{0.002}. Log Backend ghi nhận kết nối qua \texttt{[Local Host]}.
+
+\textbf{Test Mạng Di Động (4G - Viettel/VinaPhone):}
+Truy cập qua Ngrok/LocalTunnel từ 4G. Quá trình ICE mất thêm một nhịp trao đổi. Connection thành lập xong kiểm tra \texttt{getStats()} báo \texttt{Candidate Type: srflx} hoặc \texttt{relay} nếu tường lửa nhà mạng siết cấu hình UDP. Timeout TURN cảnh báo nháy lên khoảng 5s trước khi stream video mượt trở lại.
+
+\textbf{Group Call Mesh 4 người:}
+Tạo được tối đa 6 lưới Video trên màn hình, CPU ăn vào khoảng \texttt{35\%}. Khi Host Hangup, các Peer còn lại tự động kết thúc session sạch sẽ. Join Request duyệt không miss khung hình. Nút Microphone cúp mở tự do mà không làm vỡ kiến trúc stream.

@@ -1,0 +1,47 @@
+services:
+  # Signaling Server (Backend)
+  - type: web
+    name: webrtc-signaling
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+
+  # Frontend (React + Vite)
+  - type: web
+    name: webrtc-frontend
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: cd frontend && npm install --include=dev && npm run build
+    startCommand: cd frontend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Update VITE_SIGNALING_URL with your actual signaling server URL after deployment
+      - key: VITE_SIGNALING_URL
+        value: wss://webrtc-signaling-0gy4.onrender.com
+      - key: VITE_STUN_URL
+        value: stun:stun.l.google.com:19302
+      # TURN Relay: Use Metered OpenRelay (20GB free) - sign up at metered.ca
+      # Add this in Render Dashboard → Environment:
+      # VITE_METERED_TURN_URL = https://YOUR_APP.metered.live/api/v1/turn/credentials?apiKey=YOUR_API_KEY
+      # Fallback static TURN (freeTURN - may be unstable):
+      - key: VITE_TURN_UDP_URL
+        value: turn:freeturn.net:3478?transport=udp
+      - key: VITE_TURN_TCP_URL
+        value: turn:freeturn.net:3478?transport=tcp
+      - key: VITE_TURN_TLS_URL
+        value: turns:freeturn.net:5349?transport=tcp
+      - key: VITE_TURN_USERNAME
+        value: free
+      - key: VITE_TURN_PASSWORD
+        value: free
+      - key: VITE_P2P_TIMEOUT
+        value: 10000
