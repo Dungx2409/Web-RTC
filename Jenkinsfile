@@ -20,8 +20,10 @@ pipeline {
         stage('Install & Test Backend') {
             steps {
                 dir('server') {
-                    sh 'npm install'
-                    sh 'if [ -f test.js ]; then npm test; else echo "No backend tests found, skipping."; fi'
+                    docker.image('node:18').inside {
+                        sh 'npm install'
+                        sh 'if [ -f test.js ]; then npm test; else echo "No backend tests found"; fi'
+                    }
                 }
             }
         }
@@ -29,9 +31,11 @@ pipeline {
         stage('Install & Build Frontend') {
             steps {
                 dir('frontend') {
-                    sh 'npm install'
-                    sh 'npm run lint --if-present'
-                    sh 'npm run build'
+                    docker.image('node:18').inside {
+                        sh 'npm install'
+                        sh 'npm run lint --if-present'
+                        sh 'npm run build'
+                    }
                 }
             }
         }
