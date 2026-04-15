@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
         - name: backend
-          image: dungx2409/backend:1128cbd7c3c62e02e70a88c420029bd072d9a4c6
+          image: dungx2409/backend:eca6bf801739ff123ebd753a630a427370bfd3af
           ports:
             - containerPort: 5000
