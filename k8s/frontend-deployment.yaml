@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: dungx2409/frontend:v1
+          image: dungx2409/frontend:latest
           ports:
             - containerPort: 3000
