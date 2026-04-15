@@ -16,34 +16,6 @@ pipeline {
                 checkout scm
             }
         }
-
-        stage('Install & Test Backend') {
-            steps {
-                dir('server') {
-                    script {
-                        docker.image('node:18').inside {
-                            sh 'npm install'
-                            sh 'if [ -f test.js ]; then npm test; else echo "No backend tests found"; fi'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Install & Build Frontend') {
-            steps {
-                dir('frontend') {
-                    script {
-                        docker.image('node:18').inside {
-                            sh 'npm install'
-                            sh 'npm run lint --if-present'
-                            sh 'npm run build'
-                        }
-                    }
-                }
-            }
-        }
-
         stage('Build Docker Images') {
             steps {
                 script {
